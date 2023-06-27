@@ -24,6 +24,7 @@ on:
 jobs:
 
   # useful for debugging issues
+
   # show-info:
   #   name: Show issue or PR event info
   #   runs-on: ubuntu-latest
@@ -54,20 +55,22 @@ jobs:
           labeled: bug, enhancement
           label-operator: OR
 
-  add-pr-to-board:
-    name: PR
-    if: github.event_name == 'pull_request' && !contains(fromJson( inputs.users ), github.event.pull_request.user.login) && github.event.pull_request.user.login != ''
-    runs-on: ubuntu-latest
-    steps:
-      - name: Show event info
-        run: |
-          echo "Event Name: ${{ github.event_name }}"
-          echo "Number: ${{ github.event.issue.number }}"
-          echo "PR Author: ${{ github.event.pull_request.user.login }}"
+  # not supported yet
+
+  # add-pr-to-board:
+  #   name: PR
+  #   if: github.event_name == 'pull_request' && !contains(fromJson( inputs.users ), github.event.pull_request.user.login) && github.event.pull_request.user.login != ''
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - name: Show event info
+  #       run: |
+  #         echo "Event Name: ${{ github.event_name }}"
+  #         echo "Number: ${{ github.event.issue.number }}"
+  #         echo "PR Author: ${{ github.event.pull_request.user.login }}"
   
-      - uses: actions/add-to-project@v0.5.0
-        with:
-          project-url: ${{ inputs.project_url }}
-          github-token: ${{ secrets.token }}
-          labeled: bug, enhancement
-          label-operator: OR
+  #     - uses: actions/add-to-project@v0.5.0
+  #       with:
+  #         project-url: ${{ inputs.project_url }}
+  #         github-token: ${{ secrets.token }}
+  #         labeled: bug, enhancement
+  #         label-operator: OR
