@@ -11,7 +11,7 @@ on:
 
       users:
         # TODO: replace me with an org-based or team-based check
-        default: '["wagoodman", "dependabot", "tgerla", "kzantow", "willmurphyscode", "spiffs", "westonsteimel", "zhill", "nurmi"]'
+        default: '["wagoodman", "dependabot", "tgerla", "kzantow", "willmurphyscode", "spiffcs", "westonsteimel", "zhill", "nurmi"]'
         description: "JSON list as string of users to ignore"
         type: string
 
