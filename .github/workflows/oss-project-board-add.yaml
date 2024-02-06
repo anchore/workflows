@@ -49,11 +49,20 @@ jobs:
           echo "Issue Author: ${{ github.event.issue.user.login }}"
 
       - uses: actions/add-to-project@31b3f3ccdc584546fc445612dec3f38ff5edb41c #v0.5.0
+        id: add-issue-to-project
         with:
           project-url: ${{ inputs.project_url }}
           github-token: ${{ secrets.token }}
           labeled: bug, enhancement
           label-operator: OR
+
+      - uses: titoportas/update-project-fields@421a54430b3cdc9eefd8f14f9ce0142ab7678751 #v0.1.0
+        with:
+          project-url: ${{ inputs.project_url }}
+          github-token: ${{ secrets.token }}
+          item-id: ${{ steps.add-issue-to-project.outputs.itemId }}
+          field-keys: Source
+          field-values: Community
 
   # not supported yet
 
