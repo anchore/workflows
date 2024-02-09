@@ -39,7 +39,7 @@ jobs:
 
   add-issue-to-board:
     name: Issue
-    if: github.event_name == 'issues' && !contains(fromJson(  inputs.users ), github.event.issue.user.login) && github.event.issue.user.login != ''
+    if: github.event_name == 'issues'
     runs-on: ubuntu-latest
     steps:
       - name: Show event info
@@ -48,6 +48,7 @@ jobs:
           echo "Number: ${{ github.event.issue.number }}"
           echo "Issue Author: ${{ github.event.issue.user.login }}"
 
+      # add all new issues to the project board
       - uses: actions/add-to-project@31b3f3ccdc584546fc445612dec3f38ff5edb41c #v0.5.0
         id: add-issue-to-project
         with:
@@ -56,7 +57,10 @@ jobs:
           labeled: bug, enhancement
           label-operator: OR
 
+      # tag issues that are from the community
       - uses: titoportas/update-project-fields@421a54430b3cdc9eefd8f14f9ce0142ab7678751 #v0.1.0
+        if: |
+          !contains(fromJson(  inputs.users ), github.event.issue.user.login) && github.event.issue.user.login != ''
         with:
           project-url: ${{ inputs.project_url }}
           github-token: ${{ secrets.token }}
