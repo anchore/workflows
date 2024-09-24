@@ -1,8 +1,7 @@
 name: Add issues and PRs to the OSS community project board
 
-on: 
+on:
   workflow_call:
-
     inputs:
       project_url:
         default: https://github.com/orgs/anchore/projects/22
@@ -11,7 +10,7 @@ on:
 
       users:
         # TODO: replace me with an org-based or team-based check
-        default: '["wagoodman", "dependabot", "tgerla", "kzantow", "willmurphyscode", "spiffcs", "westonsteimel", "zhill", "nurmi"]'
+        default: '["wagoodman", "dependabot", "tgerla", "kzantow", "willmurphyscode", "spiffcs", "westonsteimel", "zhill", "nurmi", "popey"]'
         description: "JSON list as string of users to ignore"
         type: string
 
@@ -20,9 +19,7 @@ on:
         description: "The classic GitHub token (with project access) to use for authentication"
         required: true
 
-
 jobs:
-
   # useful for debugging issues
 
   # show-info:
@@ -80,7 +77,7 @@ jobs:
   #         echo "Event Name: ${{ github.event_name }}"
   #         echo "Number: ${{ github.event.issue.number }}"
   #         echo "PR Author: ${{ github.event.pull_request.user.login }}"
-  
+
   #     - uses: actions/add-to-project@v0.5.0
   #       with:
   #         project-url: ${{ inputs.project_url }}
