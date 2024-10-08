@@ -1,0 +1,58 @@
+name: Nudge team to start releases
+
+on:
+  workflow_dispatch:
+
+  # run every other monday at 1 PM UTC
+  schedule:
+    - cron: "0 13 * * 1/2"
+
+jobs:
+  clone-and-generate:
+    name: Generate changelog
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Stereoscope changelog
+        id: stereoscope
+        uses: ./.github/actions/changelog
+        with:
+          repository: anchore/stereoscope
+          path: stereoscope
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Syft changelog
+        id: syft
+        uses: ./.github/actions/changelog
+        with:
+          repository: anchore/syft
+          path: syft
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Grype changelog
+        id: grype
+        uses: ./.github/actions/changelog
+        with:
+          repository: anchore/grype
+          path: grype
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Craft slack payload
+        run: |
+          jq -n --arg syft "${{ steps.syft.outputs.changelog }}" \
+                --arg stereoscope "${{ steps.stereoscope.outputs.changelog }}" \
+                --arg grype "${{ steps.grype.outputs.changelog }}" \
+                '{ "syft-changelog": $syft, "stereoscope-changelog": $stereoscope, "grype-changelog": $grype }' \
+          > payload.json
+
+      - name: Show the payload
+        run: |
+          cat payload.json
+
+      - name: Send slack notification
+        run: |
+          curl -X POST -H 'Content-type: application/json' \
+            --data @payload.json \
+            ${{ secrets.RELEASE_NUDGER_WEBHOOK_URL }}

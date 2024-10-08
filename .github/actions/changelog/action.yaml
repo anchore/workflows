@@ -1,0 +1,50 @@
+name: "Generate Changelog"
+description: "Checkout repository, run make changelog, and save output."
+inputs:
+  repository:
+    description: "The GitHub repository to check out."
+    required: true
+  path:
+    description: "The path where the repository will be checked out."
+    required: true
+  github_token:
+    description: "GitHub token for authentication."
+    required: true
+outputs:
+  changelog:
+    description: "The content of the CHANGELOG.md file."
+    value: ${{ steps.save.outputs.changelog }}
+runs:
+  using: "composite"
+  steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        repository: ${{ inputs.repository }}
+        path: ${{ inputs.path }}
+        fetch-depth: 0
+
+    - name: Cache .tool directory
+      uses: actions/cache@v3
+      with:
+        path: ${{ inputs.path }}/.tool
+        key: tool-cache-${{ runner.os }}-${{ inputs.repository }}-${{ hashFiles('${{ inputs.path }}/.binny.yaml') }}
+        restore-keys: |
+          tool-cache-${{ runner.os }}-${{ inputs.repository }}-
+
+    - name: Run `make changelog`
+      working-directory: ${{ inputs.path }}
+      shell: bash
+      run: |
+        make changelog
+      env:
+        GITHUB_TOKEN: ${{ inputs.github_token }}
+
+    - name: Save changelog output
+      id: save
+      working-directory: ${{ inputs.path }}
+      shell: bash
+      run: |
+        echo "changelog<<EOF" >> $GITHUB_OUTPUT
+        cat CHANGELOG.md >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
