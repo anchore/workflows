@@ -51,8 +51,6 @@ jobs:
         with:
           project-url: ${{ inputs.project_url }}
           github-token: ${{ secrets.token }}
-          labeled: bug, enhancement
-          label-operator: OR
 
       # tag issues that are from the community
       - uses: titoportas/update-project-fields@421a54430b3cdc9eefd8f14f9ce0142ab7678751 #v0.1.0
