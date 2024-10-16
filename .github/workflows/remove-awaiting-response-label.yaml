@@ -40,10 +40,11 @@ jobs:
           echo "Repository Owner: ${{ github.event.repository.owner.login }}"
           echo "Number: ${{ github.event.issue.number }}"
           echo "Issue Author: ${{ github.event.issue.user.login }}"
+          echo "Comment Author: ${{ github.event.comment.user.login }}"
 
       - name: Remove awaiting response field value
         if: |
-          !contains(fromJson( inputs.users ), github.event.issue.user.login) && github.event.issue.user.login != ''
+          !contains(fromJson( inputs.users ), github.event.comment.user.login) && github.event.comment.user.login != ''
         run: |
           gh api graphql -f query='
             query($repo: String!, $owner: String!, $issueNumber: Int!) {
