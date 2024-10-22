@@ -1,96 +1,114 @@
-name: "Update Go Dependency"
-description: "Get the latest version of a Go module and update go.mod and go.sum."
+name: "Update Go Dependencies"
+description: "Update multiple Go dependencies and generate a changelog."
 inputs:
-  repo:
-    description: "The Go dependency to update (e.g., anchore/stereoscope)"
+  repos:
+    description: "A comma or newline separated list of repositories to update, each with a specific version (e.g., 'github.com/anchore/stereoscope@main,github.com/anchore/syft@latest')"
     required: true
-  from:
-    description: "The branch or release to fetch the latest commit/release from (use 'release' to fetch the latest release)"
-    required: true
-  fallback:
-    description: "The fallback commit source if the given 'from' branch or release does not exist"
-    required: false
-    default: "main"
 
 outputs:
-  original_version:
-    description: "The original version of the dependency"
-    value: ${{ steps.current.outputs.version }}
-  request_version:
-    description: "The requested version (commit hash or release tag) from the repository"
-    value: ${{ steps.get.outputs.version }}
-  resolved_version:
-    description: "The latest version as resolved by go tooling"
-    value: ${{ steps.resolved.outputs.version }}
-  source:
-    description: "Which branch or method was used to resolve the version"
-    value: ${{ steps.get.outputs.source }}
-  action:
-    description: "Indicates if this was an upgrade or downgrade action"
-    value: ${{ steps.resolved.outputs.action }}
+  changelog:
+    description: "The changelog detailing the version updates for each repository."
+    value: ${{ steps.update-deps.outputs.changelog }}
+  draft:
+    description: "Whether the changelog should be marked as a draft."
+    value: ${{ steps.update-deps.outputs.draft }}
 
 runs:
   using: "composite"
   steps:
-    - name: Find the original version
-      id: current
-      shell: bash
+    - name: Update dependencies and generate changelog
+      id: update-deps
+      shell: python
       run: |
-        ORIGINAL_VERSION=$(go list -m -f '{{.Version}}' github.com/${{ inputs.repo }})
-        echo "version=$ORIGINAL_VERSION" | tee -a $GITHUB_OUTPUT
+        import subprocess
+        import re
+        import os
 
-    - name: Get version from 'from' or 'fallback'
-      id: get
-      shell: bash
-      run: |
-        # Try to get the version from the 'from' input
-        if [ "${{ inputs.from }}" = "release" ]; then
-          echo "Attempting to fetch the latest release from ${{ inputs.repo }}"
-          LATEST_VERSION=$(curl -s https://api.github.com/repos/${{ inputs.repo }}/releases/latest | jq -r '.tag_name')
-        else
-          echo "Attempting to fetch the latest commit from branch ${{ inputs.from }} for ${{ inputs.repo }}"
-          LATEST_VERSION=$(git ls-remote https://github.com/${{ inputs.repo }} ${{ inputs.from }} | awk '{print $1}')
-        fi
+        def run(cmd, **kwargs):
+          opts = {
+            "shell": True,
+            "text": True,
+            "check": True,
+          }
+          opts.update(kwargs)
 
-        # If the 'from' version is empty, try the 'fallback' input
-        if [ -z "$LATEST_VERSION" ]; then
-          echo "'from' version not found, trying fallback"
-          if [ "${{ inputs.fallback }}" = "release" ]; then
-            echo "Attempting to fetch the fallback latest release from ${{ inputs.repo }}"
-            LATEST_VERSION=$(curl -s https://api.github.com/repos/${{ inputs.repo }}/releases/latest | jq -r '.tag_name')
-          elif [ -n "${{ inputs.fallback }}" ]; then
-            echo "Attempting to fetch the fallback commit from branch ${{ inputs.fallback }} for ${{ inputs.repo }}"
-            LATEST_VERSION=$(git ls-remote https://github.com/${{ inputs.repo }} ${{ inputs.fallback }} | awk '{print $1}')
-          fi
-          echo "source=${{ inputs.fallback }}" | tee -a $GITHUB_OUTPUT
-        else
-          echo "source=${{ inputs.from }}" | tee -a $GITHUB_OUTPUT
-        fi
+          print(cmd)
+          if "capture_output" not in opts or not opts["capture_output"]:
+            opts.update({
+              "stdout": None,  # Stream to the terminal (default behavior)
+              "stderr": None
+            })
+            return subprocess.run(cmd, **opts)
 
-        # Fail if neither 'from' nor 'fallback' return a valid version
-        if [ -z "$LATEST_VERSION" ]; then
-          echo "Failed to get the version from both 'from' and 'fallback'"
-          exit 1
-        fi
+          opts["capture_output"] = True
 
-        # Export the version as an output for subsequent steps
-        echo "version=$LATEST_VERSION" | tee -a $GITHUB_OUTPUT
+          result = subprocess.run(cmd, **opts)
 
-    - name: Update go.mod and go.sum
-      id: resolved
-      shell: bash
-      run: |
-        REPO_NAME=$(echo ${{ inputs.repo }} | tr / -)
-        go get github.com/${{ inputs.repo }}@${{ steps.get.outputs.version }} 2>&1 | tee /tmp/go-get-$REPO_NAME.log
+          if result.stdout:
+            print(result.stdout)
+          if result.stderr:
+            print(result.stderr)
+          print("\n")
 
-        # grep log to see if repo was downgraded for the specific repo
-        if [[ $(grep "${{ inputs.repo }}" /tmp/go-get-$REPO_NAME.log | grep "downgraded" | wc -l) -gt 0 ]]; then
-          echo "action=downgrade" | tee -a $GITHUB_OUTPUT
-        else
-          echo "action=update" | tee -a $GITHUB_OUTPUT
-        fi
+          return result
 
-        go mod tidy
+        # Parse the input repositories
+        repos_input = re.split("[\n|,]", """${{ inputs.repos }}""".strip())
+        changelog_entries = []
 
-        RESOLVED_VERSION=$(go list -m -f '{{.Version}}' github.com/${{ inputs.repo }})
-        echo "version=$RESOLVED_VERSION" | tee -a $GITHUB_OUTPUT
+        draft = "false"
+        has_downgrade = False
+        for repo_info in repos_input:
+          repo, version = repo_info.strip().split('@')
+          print(f"Updating {repo} to {version}")
+
+          # get original version (fails if not in go.mod file)
+          original_version = run(f"go list -m -f '{{{{.Version}}}}' {repo}", capture_output=True).stdout.strip()
+
+          # perform the `go get` command to update the dependency
+          log = run(f"go get {repo}@{version}", shell=True, text=True, capture_output=True).stderr.strip()
+
+          # check for downgrade or update
+          if f"downgraded {repo}" in log:
+            action = "downgrade"
+            draft = "always-true"
+            has_downgrade = True
+          else:
+            action = "update"
+
+          print(f"Action: {action}")
+
+          # get the resolved version after go get
+          resolved_version = run(f"go list -m -f '{{{{.Version}}}}' {repo}", capture_output=True).stdout.strip()
+
+          if resolved_version == "unknown" or "-" in resolved_version:
+            draft = "always-true"
+
+          # tidy up the go.mod file
+          run("go mod tidy", capture_output=False)
+
+          # create the changelog entry
+          repo_name = repo.split('/')[-1].capitalize()
+          changelog_entry = f" - **{repo_name}**: `{original_version}` ➔ `{resolved_version}` (requested `{version}`)"
+          if action == "downgrade":
+            changelog_entry += " 🔴 ***Downgrade***"
+          changelog_entries.append(changelog_entry)
+
+        # construct the full changelog body
+        pr_body = ""
+        if has_downgrade:
+          pr_body = "> [!WARNING]\n> Some dependencies were downgraded, please review if this was intentional\n\n"
+        pr_body += "## Dependencies changed\n"
+        pr_body += "\n".join(changelog_entries)
+
+        print(pr_body)
+
+        # write the changelog output
+        with open(os.getenv("GITHUB_OUTPUT"), "a") as output_file:
+          output_file.write("changelog<<EOF\n")
+          output_file.write(f"{pr_body}\n")
+          output_file.write("EOF\n")
+          output_file.write(f"draft={draft}\n")
+
+        with open(os.getenv("GITHUB_STEP_SUMMARY"), "a") as output_file:
+          output_file.write(f"{pr_body}\n")
