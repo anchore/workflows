@@ -1,0 +1,96 @@
+name: "Update Go Dependency"
+description: "Get the latest version of a Go module and update go.mod and go.sum."
+inputs:
+  repo:
+    description: "The Go dependency to update (e.g., anchore/stereoscope)"
+    required: true
+  from:
+    description: "The branch or release to fetch the latest commit/release from (use 'release' to fetch the latest release)"
+    required: true
+  fallback:
+    description: "The fallback commit source if the given 'from' branch or release does not exist"
+    required: false
+    default: "main"
+
+outputs:
+  original_version:
+    description: "The original version of the dependency"
+    value: ${{ steps.current.outputs.version }}
+  request_version:
+    description: "The requested version (commit hash or release tag) from the repository"
+    value: ${{ steps.get.outputs.version }}
+  resolved_version:
+    description: "The latest version as resolved by go tooling"
+    value: ${{ steps.resolved.outputs.version }}
+  source:
+    description: "Which branch or method was used to resolve the version"
+    value: ${{ steps.get.outputs.source }}
+  action:
+    description: "Indicates if this was an upgrade or downgrade action"
+    value: ${{ steps.resolved.outputs.action }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Find the original version
+      id: current
+      shell: bash
+      run: |
+        ORIGINAL_VERSION=$(go list -m -f '{{.Version}}' github.com/${{ inputs.repo }})
+        echo "version=$ORIGINAL_VERSION" | tee -a $GITHUB_OUTPUT
+
+    - name: Get version from 'from' or 'fallback'
+      id: get
+      shell: bash
+      run: |
+        # Try to get the version from the 'from' input
+        if [ "${{ inputs.from }}" = "release" ]; then
+          echo "Attempting to fetch the latest release from ${{ inputs.repo }}"
+          LATEST_VERSION=$(curl -s https://api.github.com/repos/${{ inputs.repo }}/releases/latest | jq -r '.tag_name')
+        else
+          echo "Attempting to fetch the latest commit from branch ${{ inputs.from }} for ${{ inputs.repo }}"
+          LATEST_VERSION=$(git ls-remote https://github.com/${{ inputs.repo }} ${{ inputs.from }} | awk '{print $1}')
+        fi
+
+        # If the 'from' version is empty, try the 'fallback' input
+        if [ -z "$LATEST_VERSION" ]; then
+          echo "'from' version not found, trying fallback"
+          if [ "${{ inputs.fallback }}" = "release" ]; then
+            echo "Attempting to fetch the fallback latest release from ${{ inputs.repo }}"
+            LATEST_VERSION=$(curl -s https://api.github.com/repos/${{ inputs.repo }}/releases/latest | jq -r '.tag_name')
+          elif [ -n "${{ inputs.fallback }}" ]; then
+            echo "Attempting to fetch the fallback commit from branch ${{ inputs.fallback }} for ${{ inputs.repo }}"
+            LATEST_VERSION=$(git ls-remote https://github.com/${{ inputs.repo }} ${{ inputs.fallback }} | awk '{print $1}')
+          fi
+          echo "source=${{ inputs.fallback }}" | tee -a $GITHUB_OUTPUT
+        else
+          echo "source=${{ inputs.from }}" | tee -a $GITHUB_OUTPUT
+        fi
+
+        # Fail if neither 'from' nor 'fallback' return a valid version
+        if [ -z "$LATEST_VERSION" ]; then
+          echo "Failed to get the version from both 'from' and 'fallback'"
+          exit 1
+        fi
+
+        # Export the version as an output for subsequent steps
+        echo "version=$LATEST_VERSION" | tee -a $GITHUB_OUTPUT
+
+    - name: Update go.mod and go.sum
+      id: resolved
+      shell: bash
+      run: |
+        REPO_NAME=$(echo ${{ inputs.repo }} | tr / -)
+        go get github.com/${{ inputs.repo }}@${{ steps.get.outputs.version }} 2>&1 | tee /tmp/go-get-$REPO_NAME.log
+
+        # grep log to see if repo was downgraded for the specific repo
+        if [[ $(grep "${{ inputs.repo }}" /tmp/go-get-$REPO_NAME.log | grep "downgraded" | wc -l) -gt 0 ]]; then
+          echo "action=downgrade" | tee -a $GITHUB_OUTPUT
+        else
+          echo "action=update" | tee -a $GITHUB_OUTPUT
+        fi
+
+        go mod tidy
+
+        RESOLVED_VERSION=$(go list -m -f '{{.Version}}' github.com/${{ inputs.repo }})
+        echo "version=$RESOLVED_VERSION" | tee -a $GITHUB_OUTPUT
