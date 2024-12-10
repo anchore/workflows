@@ -25,6 +25,8 @@ def main(repos_input: list[str], allow_downgrade: bool = False):
         # check for downgrade or update
         if f"downgraded {repo}" in log:
             action = "downgrade"
+            # we want this script to always dictate the draft status relative to the https://github.com/peter-evans/create-pull-request
+            # github action. In this case always-true will update the value on PR creation and updates.
             draft = "always-true"
             has_downgrade = True
         else:
