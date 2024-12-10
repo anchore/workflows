@@ -1,25 +1,25 @@
 name: "Update Go Dependencies"
-description: "Update multiple Go dependencies and generate a changelog."
+description: "Update one or more Go dependencies"
 inputs:
   repos:
     description: "A comma or newline separated list of repositories to update, each with a specific version (e.g., 'github.com/anchore/stereoscope@main,github.com/anchore/syft@latest')"
     required: true
 
 outputs:
-  changelog:
-    description: "The changelog detailing the version updates for each repository."
-    value: ${{ steps.update-deps.outputs.changelog }}
+  summary:
+    description: "The changes detailing the version updates for each repository."
+    value: ${{ steps.update-deps.outputs.summary }}
   draft:
-    description: "Whether the changelog should be marked as a draft."
+    description: "Whether the PR should be marked as a draft."
     value: ${{ steps.update-deps.outputs.draft }}
 
 runs:
   using: "composite"
   steps:
-    - name: Update dependencies and generate changelog
+    - name: Update dependencies
       id: update-deps
       shell: python
       run: |
-        python3 .github/actions/update-go-dependency/scripts/run.py
+        python3 .github/actions/update-go-dependencies/scripts/run.py
       env:
         INPUT_REPOS: ${{ inputs.repos }}

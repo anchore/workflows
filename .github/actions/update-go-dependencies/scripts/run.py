@@ -3,38 +3,6 @@ import re
 import os
 import sys
 
-# run a shell command and print the output
-def run(cmd, **kwargs):
-    opts = {
-        "shell": True,
-        "text": True,
-        "check": True,
-    }
-    opts.update(kwargs)
-
-    print(cmd.strip())
-    if "capture_output" not in opts or not opts["capture_output"]:
-        opts.update({
-            "stdout": None,
-            "stderr": None,
-        })
-        return subprocess.run(cmd, **opts)
-
-    opts["capture_output"] = True
-
-    result = subprocess.run(cmd, **opts)
-
-    if result.stdout:
-        out = result.stdout.strip()
-        if out:
-            print(out)
-    if result.stderr:
-        out = result.stderr.strip()
-        if out:
-            print(out)
-    print()
-
-    return result
 
 def main(repos_input: list[str], allow_downgrade: bool = False):
     changelog_entries = []
@@ -113,7 +81,9 @@ def main(repos_input: list[str], allow_downgrade: bool = False):
         print("No output file provided via $GITHUB_OUTPUT")
     else:
         with open(output_file, "a") as output_file:
-            output_file.write("changelog<<EOF\n")
+            # why the heredoc approach? This is how multiline strings are added as output variables
+            # see https://github.com/github/docs/issues/21529
+            output_file.write("summary<<EOF\n")
             output_file.write(f"{pr_body}\n")
             output_file.write("EOF\n")
             output_file.write(f"draft={draft}\n")
@@ -122,8 +92,44 @@ def main(repos_input: list[str], allow_downgrade: bool = False):
     if not summary_file:
         print("No summary file provided via $GITHUB_STEP_SUMMARY")
     else:
+        # though the calling PR might create a PR with the changes we just made, lets at least add the same PR
+        # body to the actions summary for easy reading
         with open(summary_file, "a") as output_file:
             output_file.write(f"{pr_body}\n")
+
+
+# run a shell command and print the output
+def run(cmd, **kwargs):
+    opts = {
+        "shell": True,
+        "text": True,
+        "check": True,
+    }
+    opts.update(kwargs)
+
+    print(cmd.strip())
+    if "capture_output" not in opts or not opts["capture_output"]:
+        opts.update({
+            "stdout": None,
+            "stderr": None,
+        })
+        return subprocess.run(cmd, **opts)
+
+    opts["capture_output"] = True
+
+    result = subprocess.run(cmd, **opts)
+
+    if result.stdout:
+        out = result.stdout.strip()
+        if out:
+            print(out)
+    if result.stderr:
+        out = result.stderr.strip()
+        if out:
+            print(out)
+    print()
+
+    return result
 
 
 if __name__ == "__main__":
