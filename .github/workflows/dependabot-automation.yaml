@@ -10,8 +10,14 @@ on:
         description: "Whether to auto-approve the PR"
         type: boolean
 
+      merge:
+        default: true
+        description: "Whether to auto-merge the PR"
+        type: boolean
+
 permissions:
   pull-requests: write
+  contents: write
 
 jobs:
   automation:
@@ -28,6 +34,13 @@ jobs:
       - name: Auto-approve PR
         if: inputs.approve == true
         run: gh pr review --approve "$PR_URL"
+        env:
+          PR_URL: ${{github.event.pull_request.html_url}}
+          GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
+
+      - name: Auto-merge PR
+        if: inputs.merge == true
+        run: gh pr merge --auto --squash "$PR_URL"
         env:
           PR_URL: ${{github.event.pull_request.html_url}}
           GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
