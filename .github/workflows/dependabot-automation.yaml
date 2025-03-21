@@ -15,14 +15,6 @@ on:
         description: "Whether to auto-merge the PR"
         type: boolean
 
-    secrets:
-      TOKEN_APP_ID:
-        description: "The GitHub App ID used for authentication"
-        required: true
-      TOKEN_APP_PRIVATE_KEY:
-        description: "The GitHub App private key used for authentication"
-        required: true
-
 permissions:
   pull-requests: write
   contents: write
