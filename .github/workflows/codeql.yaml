@@ -1,0 +1,62 @@
+name: CodeQL Security Scan
+
+on:
+  workflow_call:
+    inputs:
+      languages:
+        description: "Languages to analyze (JSON array format)"
+        required: false
+        type: string
+        default: '["go"]'
+      build-command:
+        description: "Custom build command"
+        required: false
+        type: string
+
+env:
+  CODEQL_EXTRACTOR_GO_BUILD_TRACING: on
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    name: Analyze
+    runs-on: ubuntu-latest
+
+    permissions:
+      security-events: write
+
+    strategy:
+      fail-fast: false
+      matrix:
+        language: ${{ fromJSON(inputs.languages) }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      # TODO: add other languages as needed...
+
+      - name: Setup Go
+        if: matrix.language == 'go'
+        uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
+        with:
+          go-version-file: "go.mod"
+          check-latest: true
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@ce28f5bb42b7a9f2c824e633a3f6ee835bab6858 # v3.29.0
+        with:
+          languages: ${{ matrix.language }}
+
+      - name: Custom Build
+        if: inputs.build-command != ''
+        run: ${{ inputs.build-command }}
+
+      - name: Autobuild
+        if: inputs.build-command == ''
+        uses: github/codeql-action/autobuild@ce28f5bb42b7a9f2c824e633a3f6ee835bab6858 # v3.29.0
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@ce28f5bb42b7a9f2c824e633a3f6ee835bab6858 # v3.29.0
