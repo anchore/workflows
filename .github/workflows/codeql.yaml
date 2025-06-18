@@ -1,42 +1,45 @@
-name: CodeQL Security Scan
+name: "CodeQL Go Analysis"
 
 on:
   workflow_call:
     inputs:
-      languages:
-        description: "Languages to analyze (JSON array format)"
+      working-directory:
+        description: "Working directory for Go commands"
         required: false
         type: string
-        default: '["go"]'
+        default: "."
       build-command:
-        description: "Custom build command"
+        description: "Build command to execute"
         required: false
         type: string
-
-env:
-  CODEQL_EXTRACTOR_GO_BUILD_TRACING: on
-
-permissions:
-  contents: read
+        default: "make build"
+      runner-os:
+        description: "Operating system for the runner"
+        required: false
+        type: string
+        default: "ubuntu-latest"
 
 jobs:
   analyze:
-    name: Analyze
-    runs-on: ubuntu-latest
-
+    name: CodeQL Go Analysis
+    runs-on: ${{ inputs.runner-os }}
+    timeout-minutes: 45
     permissions:
       security-events: write
+      contents: read
 
     strategy:
       fail-fast: false
       matrix:
-        language: ${{ fromJSON(inputs.languages) }}
+        include:
+          - language: go
+            build-mode: manual
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-
-      # TODO: add other languages as needed...
+        with:
+          fetch-depth: 2
 
       - name: Setup Go
         if: matrix.language == 'go'
@@ -46,17 +49,25 @@ jobs:
           check-latest: true
 
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@ce28f5bb42b7a9f2c824e633a3f6ee835bab6858 # v3.29.0
+        uses: github/codeql-action/init@v3
         with:
           languages: ${{ matrix.language }}
+          build-mode: ${{ matrix.build-mode }}
 
-      - name: Custom Build
-        if: inputs.build-command != ''
-        run: ${{ inputs.build-command }}
+      - name: Download dependencies
+        working-directory: ${{ inputs.working-directory }}
+        run: |
+          echo "Downloading Go dependencies..."
+          go mod download
+          go mod verify
 
-      - name: Autobuild
-        if: inputs.build-command == ''
-        uses: github/codeql-action/autobuild@ce28f5bb42b7a9f2c824e633a3f6ee835bab6858 # v3.29.0
+      - name: Build
+        working-directory: ${{ inputs.working-directory }}
+        run: |
+          echo "Building module: ${{ inputs.build-command }}"
+          ${{ inputs.build-command }}
 
       - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@ce28f5bb42b7a9f2c824e633a3f6ee835bab6858 # v3.29.0
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:${{ matrix.language }}"
