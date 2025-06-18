@@ -1,0 +1,62 @@
+name: "CodeQL Go Analysis"
+
+on:
+  workflow_call:
+    inputs:
+      working-directory:
+        description: "Working directory for Go commands"
+        required: false
+        type: string
+        default: "."
+      entrypoint:
+        description: "Entrypoint to build"
+        required: true
+        type: string
+      runner-os:
+        description: "Operating system for the runner"
+        required: false
+        type: string
+        default: "ubuntu-latest"
+
+jobs:
+  analyze:
+    name: Go
+    runs-on: ${{ inputs.runner-os }}
+    timeout-minutes: 45
+    permissions:
+      security-events: write
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 2
+
+      - name: Setup Go
+        uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
+        with:
+          go-version-file: "go.mod"
+          check-latest: true
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: go
+          build-mode: manual
+
+      - name: Download dependencies
+        working-directory: ${{ inputs.working-directory }}
+        run: |
+          go mod download
+          go mod verify
+
+      - name: Build
+        working-directory: ${{ inputs.working-directory }}
+        run: |
+          mkdir -p snapshot
+          go build -o snapshot/${{ inputs.entrypoint }} ${{ inputs.entrypoint }}
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:go"
