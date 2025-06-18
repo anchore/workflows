@@ -8,11 +8,10 @@ on:
         required: false
         type: string
         default: "."
-      build-command:
-        description: "Build command to execute"
-        required: false
+      entrypoint:
+        description: "Entrypoint to build"
+        required: true
         type: string
-        default: "make build"
       runner-os:
         description: "Operating system for the runner"
         required: false
@@ -21,20 +20,12 @@ on:
 
 jobs:
   analyze:
-    name: CodeQL Go Analysis
+    name: Go
     runs-on: ${{ inputs.runner-os }}
     timeout-minutes: 45
     permissions:
       security-events: write
       contents: read
-
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - language: go
-            build-mode: manual
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -42,7 +33,6 @@ jobs:
           fetch-depth: 2
 
       - name: Setup Go
-        if: matrix.language == 'go'
         uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
         with:
           go-version-file: "go.mod"
@@ -51,23 +41,22 @@ jobs:
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v3
         with:
-          languages: ${{ matrix.language }}
-          build-mode: ${{ matrix.build-mode }}
+          languages: go
+          build-mode: manual
 
       - name: Download dependencies
         working-directory: ${{ inputs.working-directory }}
         run: |
-          echo "Downloading Go dependencies..."
           go mod download
           go mod verify
 
       - name: Build
         working-directory: ${{ inputs.working-directory }}
         run: |
-          echo "Building module: ${{ inputs.build-command }}"
-          ${{ inputs.build-command }}
+          mkdir -p snapshot
+          go build -o snapshot/${{ inputs.entrypoint }} ${{ inputs.entrypoint }}
 
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v3
         with:
-          category: "/language:${{ matrix.language }}"
+          category: "/language:go"
