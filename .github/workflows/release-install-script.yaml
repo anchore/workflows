@@ -11,13 +11,13 @@ on:
         description: release tag to upload install script for (prefixed with v)
         required: true
       latest:
-        description: whether this is the latest release
+        description: whether this is the latest release (does not override when tag is a pre-releases)
         required: false
         default: true
         type: boolean
       s3-bucket:
         type: string
-        description: the S3 bucket to upload the install script to (legacy)
+        description: the S3 bucket to upload the install script to
         required: false
         default: 'toolbox-data.anchore.io'
       r2-bucket:
@@ -53,9 +53,30 @@ jobs:
           persist-credentials: false
           ref: ${{ inputs.tag }}
 
+      # check if this is a pre-release to determine if we should treat it as "latest"
+      # pre-releases should not update the latest install script or version files
+      - name: Check if pre-release
+        id: prerelease-check
+        env:
+          TAG: ${{ inputs.tag }}
+          REPO_OWNER: ${{ github.repository_owner }}
+          REPO_NAME: ${{ github.event.repository.name }}
+        run: |
+          # query GitHub API to check if this release is marked as pre-release
+          IS_PRERELEASE=$(curl -SsL "https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/releases/tags/${TAG}" | jq -r '.prerelease // false')
+          
+          # if it's a pre-release, treat latest as false regardless of input
+          if [[ "${IS_PRERELEASE}" == "true" ]]; then
+            echo "This is a pre-release (${TAG}), treating as non-latest"
+            echo "is_latest=false" >> $GITHUB_OUTPUT
+          else
+            echo "This is a regular release, using input latest value: ${{ inputs.latest }}"
+            echo "is_latest=${{ inputs.latest }}" >> $GITHUB_OUTPUT
+          fi
+
       # create a version file for legacy S3 upload (only when this is the latest release)
       - name: Create version file
-        if: ${{ inputs.latest == true }}
+        if: ${{ steps.prerelease-check.outputs.is_latest == 'true' }}
         env:
           TAG: ${{ inputs.tag }}
         run: |
@@ -87,7 +108,7 @@ jobs:
       # upload to latest path: {project}/install.sh
       # note: we have a cloudflare rewrite rule to transform any requests like "/grype" or similar to "/grype/install.sh"
       - name: Upload latest install.sh
-        if: ${{ inputs.latest == true }}
+        if: ${{ steps.prerelease-check.outputs.is_latest == 'true' }}
         env:
           TAG: ${{ inputs.tag }}
           PROJECT_NAME: ${{ github.event.repository.name }}
@@ -100,7 +121,7 @@ jobs:
 
       # upload version file to R2 for latest release tracking
       - name: Upload version file
-        if: ${{ inputs.latest == true }}
+        if: ${{ steps.prerelease-check.outputs.is_latest == 'true' }}
         env:
           TAG: ${{ inputs.tag }}
           PROJECT_NAME: ${{ github.event.repository.name }}
@@ -121,7 +142,7 @@ jobs:
 
       # maintain backward compatibility by uploading version file to legacy S3 location
       - name: Upload legacy version file (s3)
-        if: ${{ inputs.latest == 'true' }}
+        if: ${{ steps.prerelease-check.outputs.is_latest == 'true' }}
         env:
           TAG: ${{ inputs.tag }}
           PROJECT_NAME: ${{ github.event.repository.name }}
