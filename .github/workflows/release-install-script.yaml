@@ -1,0 +1,132 @@
+name: "Release install script"
+
+permissions:
+  contents: read
+
+on:
+  workflow_call:
+    inputs:
+      tag:
+        type: string
+        description: release tag to upload install script for (prefixed with v)
+        required: true
+      latest:
+        description: whether this is the latest release
+        required: false
+        default: true
+        type: boolean
+      s3-bucket:
+        type: string
+        description: the S3 bucket to upload the install script to (legacy)
+        required: false
+        default: 'toolbox-data.anchore.io'
+      r2-bucket:
+        type: string
+        description: the R2 bucket to upload the install script to
+        required: false
+        default: 'oss-prod-anchore-install'
+
+    secrets:
+      # cloudflare R2 credentials
+      R2_INSTALL_ACCESS_KEY_ID:
+        required: true
+      R2_INSTALL_SECRET_ACCESS_KEY:
+        required: true
+      R2_ENDPOINT:
+        required: true
+
+      # AWS S3 credentials
+      S3_INSTALL_AWS_ACCESS_KEY_ID:
+        required: true
+      S3_INSTALL_AWS_SECRET_ACCESS_KEY:
+        required: true
+
+jobs:
+  upload:
+    name: "Upload"
+    runs-on: ubuntu-24.04
+    steps:
+
+      # checkout the specific tag to upload the install script for (this also validates the tag exists)
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 #v4.2.2
+        with:
+          persist-credentials: false
+          ref: ${{ inputs.tag }}
+
+      # create a version file for legacy S3 upload (only when this is the latest release)
+      - name: Create version file
+        if: ${{ inputs.latest == true }}
+        env:
+          TAG: ${{ inputs.tag }}
+        run: |
+          # create legacy version file with v prefix (no newline)
+          printf "${TAG}" > version
+
+      # configure AWS CLI to work with Cloudflare R2
+      - name: Configure AWS CLI for R2
+        run: |
+          aws configure set aws_access_key_id ${{ secrets.R2_INSTALL_ACCESS_KEY_ID }}
+          aws configure set aws_secret_access_key ${{ secrets.R2_INSTALL_SECRET_ACCESS_KEY }}
+          aws configure set region auto
+
+      # always upload install script to versioned path for historical access
+      # upload to versioned path: {project}/{tag}/install.sh
+      - name: Upload versioned install.sh
+        env:
+          TAG: ${{ inputs.tag }}
+          PROJECT_NAME: ${{ github.event.repository.name }}
+          BUCKET: ${{ inputs.r2-bucket }}
+          ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+        run: |
+          
+          aws s3 cp install.sh s3://${BUCKET}/${PROJECT_NAME}/${TAG}/install.sh \
+            --endpoint-url=${ENDPOINT} \
+            --content-type "text/plain"
+
+      # upload install script to "latest" path only when this is the latest release
+      # upload to latest path: {project}/install.sh
+      # note: we have a cloudflare rewrite rule to transform any requests like "/grype" or similar to "/grype/install.sh"
+      - name: Upload latest install.sh
+        if: ${{ inputs.latest == true }}
+        env:
+          TAG: ${{ inputs.tag }}
+          PROJECT_NAME: ${{ github.event.repository.name }}
+          BUCKET: ${{ inputs.r2-bucket }}
+          ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+        run: |
+          aws s3 cp install.sh s3://${BUCKET}/${PROJECT_NAME}/install.sh \
+            --endpoint-url=${ENDPOINT} \
+            --content-type "text/plain"
+
+      # upload version file to R2 for latest release tracking
+      - name: Upload version file
+        if: ${{ inputs.latest == true }}
+        env:
+          TAG: ${{ inputs.tag }}
+          PROJECT_NAME: ${{ github.event.repository.name }}
+          BUCKET: ${{ inputs.r2-bucket }}
+          ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+        run: |
+          aws s3 cp version s3://${BUCKET}/${PROJECT_NAME}/version \
+            --endpoint-url=${ENDPOINT} \
+            --content-type "text/plain"
+
+      # reconfigure AWS CLI for legacy S3 storage
+      - name: Configure AWS CLI for S3
+        uses: aws-actions/configure-aws-credentials@b47578312673ae6fa5b5096b330d9fbac3d116df #v4.2.1
+        with:
+          aws-access-key-id: ${{ secrets.S3_INSTALL_AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.S3_INSTALL_AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-west-2
+
+      # maintain backward compatibility by uploading version file to legacy S3 location
+      - name: Upload legacy version file (s3)
+        if: ${{ inputs.latest == 'true' }}
+        env:
+          TAG: ${{ inputs.tag }}
+          PROJECT_NAME: ${{ github.event.repository.name }}
+          BUCKET: ${{ inputs.s3-bucket }}
+        run: |
+          # upload the legacy version file to latest path
+          aws s3 cp version s3://${BUCKET}/${PROJECT_NAME}/releases/latest/VERSION \
+            --content-type "text/plain"
