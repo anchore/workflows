@@ -28,6 +28,7 @@ runners:
   quality-gate:
     cpu: 2
     ram: [16, 32]
+    disk: large # 80gb EBS volume, see https://runs-on.com/configuration/job-labels/#disk
     family:
       - "r7*"   # memory-optimized gen 7 (* = all sizes)
       - "r6i*"  # memory-optimized gen 6 Intel
@@ -61,6 +62,7 @@ runners:
   large:
     cpu: 4
     ram: [32] # grype-db was having memory issues for 16 GB runners
+    disk: large # 80gb EBS volume, see https://runs-on.com/configuration/job-labels/#disk
     family:
       - "r7*"   # memory-optimized gen 7 (* = all sizes)
       - "r6i*"  # memory-optimized gen 6 Intel
