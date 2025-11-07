@@ -84,7 +84,9 @@ runners:
     cpu: 2
     ram: [4]
     family:
-      - "t4g*"   # ARM burstable gen 4
+      - "t4g*"   # ARM burstable gen 4 (primary)
+      - "m6g*"   # ARM general-purpose gen 6 (fallback)
+      - "m7g*"   # ARM general-purpose gen 7 (fallback)
     spot: price-capacity-optimized
     extras: s3-cache
 
