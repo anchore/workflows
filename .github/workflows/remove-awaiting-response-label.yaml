@@ -30,7 +30,8 @@ on:
 
 jobs:
   remove-awaiting-response:
-    runs-on: ubuntu-latest
+    # Runner definition: workflows/.github/runs-on.yml
+    runs-on: runs-on=${{ github.run_id }}/runner=tiny
     if: ${{ github.event_name == 'issue_comment' && !github.event.issue.pull_request }}
     steps:
       - name: Show event info

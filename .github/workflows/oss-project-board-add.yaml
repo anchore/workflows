@@ -37,7 +37,8 @@ jobs:
   add-issue-to-board:
     name: Issue
     if: github.event_name == 'issues'
-    runs-on: ubuntu-latest
+    # Runner definition: workflows/.github/runs-on.yml
+    runs-on: runs-on=${{ github.run_id }}/runner=tiny
     steps:
       - name: Show event info
         run: |
