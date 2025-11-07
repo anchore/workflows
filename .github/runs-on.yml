@@ -1,7 +1,6 @@
 # runs-on.com runner configuration
 
 runners:
-
   # GENERAL PURPOSE RUNNERS ##########################################################################################
 
   # small: fast, cost-effective runners for lightweight jobs
@@ -13,10 +12,14 @@ runners:
     cpu: 2
     ram: [4, 8]
     family:
-      - "c7*"   # compute-optimized gen 7 (* = all sizes)
-      - "m7*"   # general-purpose gen 7
-      - "c6i*"  # compute-optimized gen 6 Intel
-      - "m6i*"  # general-purpose gen 6 Intel
+      - "c7*" # compute-optimized gen 7 (* = all sizes)
+      - "m7*" # general-purpose gen 7
+      - "c6i*" # compute-optimized gen 6 Intel
+      - "m6i*" # general-purpose gen 6 Intel
+      - "c6a*" # compute-optimized gen 6 AMD
+      - "m6a*" # general-purpose gen 6 AMD
+      - "c5*" # compute-optimized gen 5
+      - "m5*" # general-purpose gen 5
     spot: price-capacity-optimized
     extras: s3-cache
 
@@ -30,11 +33,15 @@ runners:
     ram: [16, 32]
     disk: large # 80gb EBS volume, see https://runs-on.com/configuration/job-labels/#disk
     family:
-      - "r7*"   # memory-optimized gen 7 (* = all sizes)
-      - "r6i*"  # memory-optimized gen 6 Intel
-      - "m7*"   # general-purpose gen 7
-      - "m6i*"  # general-purpose gen 6 Intel
-    spot: price-capacity-optimized
+      - "r7*" # memory-optimized gen 7 (* = all sizes)
+      - "r6i*" # memory-optimized gen 6 Intel
+      - "r6a*" # memory-optimized gen 6 AMD
+      - "m7*" # general-purpose gen 7
+      - "m6i*" # general-purpose gen 6 Intel
+      - "m6a*" # general-purpose gen 6 AMD
+      - "r5*" # memory-optimized gen 5
+      - "m5*" # general-purpose gen 5
+    spot: false # spot is not a good idea for quality-gate jobs, as they take a while to run
     extras: s3-cache
 
   # release: reliable on-demand runners for production deployments
@@ -48,11 +55,15 @@ runners:
     cpu: 2
     ram: [4, 8]
     family:
-      - "c7*"   # compute-optimized gen 7 (* = all sizes)
-      - "m7*"   # general-purpose gen 7
-      - "c6i*"  # compute-optimized gen 6 Intel
-      - "m6i*"  # general-purpose gen 6 Intel
-    spot: false
+      - "c7*" # compute-optimized gen 7 (* = all sizes)
+      - "m7*" # general-purpose gen 7
+      - "c6i*" # compute-optimized gen 6 Intel
+      - "m6i*" # general-purpose gen 6 Intel
+      - "c6a*" # compute-optimized gen 6 AMD
+      - "m6a*" # general-purpose gen 6 AMD
+      - "c5*" # compute-optimized gen 5
+      - "m5*" # general-purpose gen 5
+    spot: false # never use spot instances for release jobs
     extras: ["s3-cache", "ephemeral-registry"]
 
   # large: beefy runners for building a DB and syncing large data sets
@@ -64,11 +75,15 @@ runners:
     ram: [32] # grype-db was having memory issues for 16 GB runners
     disk: large # 80gb EBS volume, see https://runs-on.com/configuration/job-labels/#disk
     family:
-      - "r7*"   # memory-optimized gen 7 (* = all sizes)
-      - "r6i*"  # memory-optimized gen 6 Intel
-      - "m7*"   # general-purpose gen 7
-      - "m6i*"  # general-purpose gen 6 Intel
-    spot: false  # these tasks might run for longer, thus we want to avoid interruptions
+      - "r7*" # memory-optimized gen 7 (* = all sizes)
+      - "r6i*" # memory-optimized gen 6 Intel
+      - "r6a*" # memory-optimized gen 6 AMD
+      - "m7*" # general-purpose gen 7
+      - "m6i*" # general-purpose gen 6 Intel
+      - "m6a*" # general-purpose gen 6 AMD
+      - "r5*" # memory-optimized gen 5
+      - "m5*" # general-purpose gen 5
+    spot: false # these tasks might run for longer, thus we want to avoid interruptions
     extras: s3-cache
 
   # ARM RUNNERS ####################################################################################################
@@ -84,7 +99,14 @@ runners:
     cpu: 2
     ram: [4]
     family:
-      - "t4g*"   # ARM burstable gen 4
+      # Prefer ARM (cheaper)
+      - "t4g*" # ARM burstable gen 4
+      - "m6g*" # ARM general-purpose gen 6
+      - "m7g*" # ARM general-purpose gen 7
+      # Fallback to x64 when ARM unavailable
+      - "t3*" # x64 burstable gen 3
+      - "t3a*" # x64 burstable gen 3 AMD
+      - "m5*" # x64 general-purpose gen 5
     spot: price-capacity-optimized
     extras: s3-cache
 
@@ -98,10 +120,20 @@ runners:
     cpu: 2
     ram: [4, 8]
     family:
-      - "c7g*"   # compute-optimized ARM gen 7
-      - "m7g*"   # general-purpose ARM gen 7
-      - "c6g*"   # compute-optimized ARM gen 6
-      - "m6g*"   # general-purpose ARM gen 6
+      # Prefer ARM (cheaper)
+      - "c7g*" # compute-optimized ARM gen 7
+      - "m7g*" # general-purpose ARM gen 7
+      - "c6g*" # compute-optimized ARM gen 6
+      - "m6g*" # general-purpose ARM gen 6
+      - "c6gn*" # network-optimized ARM gen 6
+      - "t4g*" # burstable ARM gen 4
+      # Fallback to x64 when ARM unavailable
+      - "c7*" # compute-optimized gen 7
+      - "m7*" # general-purpose gen 7
+      - "c6i*" # compute-optimized gen 6 Intel
+      - "m6i*" # general-purpose gen 6 Intel
+      - "c6a*" # compute-optimized gen 6 AMD
+      - "m6a*" # general-purpose gen 6 AMD
     spot: price-capacity-optimized
     extras: s3-cache
 
@@ -116,9 +148,19 @@ runners:
     ram: [32]
     disk: large
     family:
-      - "r7g*"   # memory-optimized ARM gen 7
-      - "r6g*"   # memory-optimized ARM gen 6
-      - "m7g*"   # general-purpose ARM gen 7
-      - "m6g*"   # general-purpose ARM gen 6
-    spot: false
+      # Prefer ARM (cheaper)
+      - "r7g*" # memory-optimized ARM gen 7
+      - "r6g*" # memory-optimized ARM gen 6
+      - "m7g*" # general-purpose ARM gen 7
+      - "m6g*" # general-purpose ARM gen 6
+      - "c7g*" # compute-optimized ARM gen 7
+      - "c6g*" # compute-optimized ARM gen 6
+      # Fallback to x64 when ARM unavailable
+      - "r7*" # memory-optimized gen 7
+      - "r6i*" # memory-optimized gen 6 Intel
+      - "r6a*" # memory-optimized gen 6 AMD
+      - "m7*" # general-purpose gen 7
+      - "m6i*" # general-purpose gen 6 Intel
+      - "m6a*" # general-purpose gen 6 AMD
+    spot: false # these tasks might run for longer, thus we want to avoid interruptions
     extras: s3-cache

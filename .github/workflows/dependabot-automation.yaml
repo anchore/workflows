@@ -15,7 +15,8 @@ permissions:
 
 jobs:
   automation:
-    runs-on: ubuntu-latest
+    # Runner definition: workflows/.github/runs-on.yml
+    runs-on: runs-on=${{ github.run_id }}/runner=tiny
     if: github.actor == 'dependabot[bot]'
     steps:
 

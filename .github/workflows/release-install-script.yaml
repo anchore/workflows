@@ -19,12 +19,12 @@ on:
         type: string
         description: the S3 bucket to upload the install script to (legacy)
         required: false
-        default: 'toolbox-data.anchore.io'
+        default: "toolbox-data.anchore.io"
       r2-bucket:
         type: string
         description: the R2 bucket to upload the install script to
         required: false
-        default: 'oss-prod-anchore-install'
+        default: "oss-prod-anchore-install"
 
     secrets:
       # cloudflare R2 credentials
@@ -44,9 +44,9 @@ on:
 jobs:
   upload:
     name: "Upload"
-    runs-on: ubuntu-24.04
+    # Runner definition: workflows/.github/runs-on.yml
+    runs-on: runs-on=${{ github.run_id }}/runner=release
     steps:
-
       # checkout the specific tag to upload the install script for (this also validates the tag exists)
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 #v4.2.2
         with:
@@ -78,7 +78,7 @@ jobs:
           BUCKET: ${{ inputs.r2-bucket }}
           ENDPOINT: ${{ secrets.R2_ENDPOINT }}
         run: |
-          
+
           aws s3 cp install.sh s3://${BUCKET}/${PROJECT_NAME}/${TAG}/install.sh \
             --endpoint-url=${ENDPOINT} \
             --content-type "text/plain"
