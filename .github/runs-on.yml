@@ -66,6 +66,28 @@ runners:
     spot: false # never use spot instances for release jobs
     extras: ["s3-cache", "ephemeral-registry"]
 
+  # build: high-CPU runners for parallel multi-architecture compilation
+  # - goreleaser builds (linux/amd64, linux/arm64, darwin/amd64, darwin/arm64, windows/amd64)
+  # - parallel Go compilation across multiple GOOS/GOARCH targets (up to 12 parallel)
+  # - snapshot builds
+  # 16 CPUs for 12 parallel builds (1.3 CPU/build, no contention)
+  # 32-64 GB for compilation memory (2.7-5.3 GB per build)
+  # disk: 40GB (default)
+  build:
+    cpu: 16
+    ram: [32, 64]
+    family:
+      - "c7*" # compute-optimized gen 7 (* = all sizes)
+      - "c6i*" # compute-optimized gen 6 Intel
+      - "c6a*" # compute-optimized gen 6 AMD
+      - "m7*" # general-purpose gen 7 (fallback)
+      - "m6i*" # general-purpose gen 6 Intel (fallback)
+      - "m6a*" # general-purpose gen 6 AMD (fallback)
+      - "c5*" # compute-optimized gen 5 (fallback)
+      - "m5*" # general-purpose gen 5 (fallback)
+    spot: false # reliability for build workflows
+    extras: ["s3-cache", "ephemeral-registry"]
+
   # large: beefy runners for building a DB and syncing large data sets
   # - downloading and processing large vulnerability data sets
   # spot: false for 100% reliability (no interruptions for longer running / production related jobs)
