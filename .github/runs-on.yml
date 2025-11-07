@@ -99,9 +99,14 @@ runners:
     cpu: 2
     ram: [4]
     family:
-      - "t4g*" # ARM burstable gen 4 (primary)
-      - "t3*" # x64 burstable gen 3 (fallback)
-      - "t3a*" # x64 burstable gen 3 AMD (fallback)
+      # Prefer ARM (cheaper)
+      - "t4g*" # ARM burstable gen 4
+      - "m6g*" # ARM general-purpose gen 6
+      - "m7g*" # ARM general-purpose gen 7
+      # Fallback to x64 when ARM unavailable
+      - "t3*" # x64 burstable gen 3
+      - "t3a*" # x64 burstable gen 3 AMD
+      - "m5*" # x64 general-purpose gen 5
     spot: price-capacity-optimized
     extras: s3-cache
 
@@ -115,12 +120,20 @@ runners:
     cpu: 2
     ram: [4, 8]
     family:
+      # Prefer ARM (cheaper)
       - "c7g*" # compute-optimized ARM gen 7
       - "m7g*" # general-purpose ARM gen 7
       - "c6g*" # compute-optimized ARM gen 6
       - "m6g*" # general-purpose ARM gen 6
       - "c6gn*" # network-optimized ARM gen 6
-      - "t4g*" # burstable ARM gen 4 (fallback)
+      - "t4g*" # burstable ARM gen 4
+      # Fallback to x64 when ARM unavailable
+      - "c7*" # compute-optimized gen 7
+      - "m7*" # general-purpose gen 7
+      - "c6i*" # compute-optimized gen 6 Intel
+      - "m6i*" # general-purpose gen 6 Intel
+      - "c6a*" # compute-optimized gen 6 AMD
+      - "m6a*" # general-purpose gen 6 AMD
     spot: price-capacity-optimized
     extras: s3-cache
 
@@ -135,11 +148,19 @@ runners:
     ram: [32]
     disk: large
     family:
+      # Prefer ARM (cheaper)
       - "r7g*" # memory-optimized ARM gen 7
       - "r6g*" # memory-optimized ARM gen 6
       - "m7g*" # general-purpose ARM gen 7
       - "m6g*" # general-purpose ARM gen 6
-      - "c7g*" # compute-optimized ARM gen 7 (fallback)
-      - "c6g*" # compute-optimized ARM gen 6 (fallback)
+      - "c7g*" # compute-optimized ARM gen 7
+      - "c6g*" # compute-optimized ARM gen 6
+      # Fallback to x64 when ARM unavailable
+      - "r7*" # memory-optimized gen 7
+      - "r6i*" # memory-optimized gen 6 Intel
+      - "r6a*" # memory-optimized gen 6 AMD
+      - "m7*" # general-purpose gen 7
+      - "m6i*" # general-purpose gen 6 Intel
+      - "m6a*" # general-purpose gen 6 AMD
     spot: false # these tasks might run for longer, thus we want to avoid interruptions
     extras: s3-cache
