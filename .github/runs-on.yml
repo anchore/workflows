@@ -70,3 +70,55 @@ runners:
       - "m6i*"  # general-purpose gen 6 Intel
     spot: false  # these tasks might run for longer, thus we want to avoid interruptions
     extras: s3-cache
+
+  # ARM RUNNERS ####################################################################################################
+
+  # tiny: ultra cost-effective ARM runners for trivial workloads
+  # - dependency updates (Dependabot)
+  # - label management
+  # - quick validation checks
+  # - workflow orchestration/triggers
+  # ARM burstable instances ~50% cheaper than x64
+  # disk: 40GB (default)
+  tiny:
+    cpu: 2
+    ram: [4]
+    family:
+      - "t4g*"   # ARM burstable gen 4
+    spot: price-capacity-optimized
+    extras: s3-cache
+
+  # small-arm: ARM equivalent of 'small' runner
+  # - unit tests
+  # - static analysis
+  # - linting
+  # ARM instances ~3-10% cheaper than x64, better for sustained workloads than tiny
+  # disk: 40GB (default)
+  small-arm:
+    cpu: 2
+    ram: [4, 8]
+    family:
+      - "c7g*"   # compute-optimized ARM gen 7
+      - "m7g*"   # general-purpose ARM gen 7
+      - "c6g*"   # compute-optimized ARM gen 6
+      - "m6g*"   # general-purpose ARM gen 6
+    spot: price-capacity-optimized
+    extras: s3-cache
+
+  # large-arm: ARM equivalent of 'large' runner
+  # - DB building (if ARM compatible)
+  # - large data processing
+  # ARM instances ~9-15% cheaper than x64
+  # spot: false for reliability
+  # disk: 80GB
+  large-arm:
+    cpu: 4
+    ram: [32]
+    disk: large
+    family:
+      - "r7g*"   # memory-optimized ARM gen 7
+      - "r6g*"   # memory-optimized ARM gen 6
+      - "m7g*"   # general-purpose ARM gen 7
+      - "m6g*"   # general-purpose ARM gen 6
+    spot: false
+    extras: s3-cache
