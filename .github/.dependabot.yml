@@ -6,6 +6,8 @@ updates:
       interval: "weekly"
       day: "monday"
       time: "09:00"
+    cooldown:
+      default-days: 4
     open-pull-requests-limit: 10
     groups:
       github-actions:
