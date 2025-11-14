@@ -96,14 +96,10 @@ runners:
     cpu: 8
     ram: [16]
     family:
-      - "r7*" # memory-optimized gen 7 (* = all sizes)
-      - "r6i*" # memory-optimized gen 6 Intel
-      - "r6a*" # memory-optimized gen 6 AMD
-      - "m7*" # general-purpose gen 7
-      - "m6i*" # general-purpose gen 6 Intel
-      - "m6a*" # general-purpose gen 6 AMD
-      - "r5*" # memory-optimized gen 5
-      - "m5*" # general-purpose gen 5
+      - "c7*" # compute-optimized gen 7 (* = all sizes)
+      - "c6i*" # compute-optimized gen 6 Intel
+      - "c6a*" # compute-optimized gen 6 AMD
+      - "c5*" # compute-optimized gen 5
     spot: false # these tasks might run for longer, thus we want to avoid interruptions
     extras: s3-cache
 
@@ -187,20 +183,14 @@ runners:
     cpu: 8
     ram: [16]
     family:
-      # Prefer ARM (cheaper)
-      - "r7g*" # memory-optimized ARM gen 7
-      - "r6g*" # memory-optimized ARM gen 6
-      - "m7g*" # general-purpose ARM gen 7
-      - "m6g*" # general-purpose ARM gen 6
+      # Prefer ARM compute-optimized (cheaper, matches 8 vCPU + 16GB)
       - "c7g*" # compute-optimized ARM gen 7
       - "c6g*" # compute-optimized ARM gen 6
-      # Fallback to x64 when ARM unavailable
-      - "r7*" # memory-optimized gen 7
-      - "r6i*" # memory-optimized gen 6 Intel
-      - "r6a*" # memory-optimized gen 6 AMD
-      - "m7*" # general-purpose gen 7
-      - "m6i*" # general-purpose gen 6 Intel
-      - "m6a*" # general-purpose gen 6 AMD
+      # Fallback to x64 compute-optimized when ARM unavailable
+      - "c7*" # compute-optimized gen 7
+      - "c6i*" # compute-optimized gen 6 Intel
+      - "c6a*" # compute-optimized gen 6 AMD
+      - "c5*" # compute-optimized gen 5
     spot: false # these tasks might run for longer, thus we want to avoid interruptions
     extras: s3-cache
 
