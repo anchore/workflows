@@ -92,10 +92,28 @@ runners:
   # - downloading and processing large vulnerability data sets
   # spot: false for 100% reliability (no interruptions for longer running / production related jobs)
   # disk: 40GB (default)
+  medium:
+    cpu: 8
+    ram: [16]
+    family:
+      - "r7*" # memory-optimized gen 7 (* = all sizes)
+      - "r6i*" # memory-optimized gen 6 Intel
+      - "r6a*" # memory-optimized gen 6 AMD
+      - "m7*" # general-purpose gen 7
+      - "m6i*" # general-purpose gen 6 Intel
+      - "m6a*" # general-purpose gen 6 AMD
+      - "r5*" # memory-optimized gen 5
+      - "m5*" # general-purpose gen 5
+    spot: false # these tasks might run for longer, thus we want to avoid interruptions
+    extras: s3-cache
+
+  # large: beefy runners for building a DB and syncing large data sets
+  # - downloading and processing large vulnerability data sets
+  # spot: false for 100% reliability (no interruptions for longer running / production related jobs)
+  # disk: 40GB (default)
   large:
-    cpu: 4
-    ram: [32] # grype-db was having memory issues for 16 GB runners
-    disk: large # 80gb EBS volume, see https://runs-on.com/configuration/job-labels/#disk
+    cpu: 8
+    ram: [32]
     family:
       - "r7*" # memory-optimized gen 7 (* = all sizes)
       - "r6i*" # memory-optimized gen 6 Intel
@@ -164,9 +182,37 @@ runners:
   # - large data processing
   # ARM instances ~9-15% cheaper than x64
   # spot: false for reliability
-  # disk: 80GB
+  # disk: 40GB (default)
+  medium-arm:
+    cpu: 8
+    ram: [16]
+    family:
+      # Prefer ARM (cheaper)
+      - "r7g*" # memory-optimized ARM gen 7
+      - "r6g*" # memory-optimized ARM gen 6
+      - "m7g*" # general-purpose ARM gen 7
+      - "m6g*" # general-purpose ARM gen 6
+      - "c7g*" # compute-optimized ARM gen 7
+      - "c6g*" # compute-optimized ARM gen 6
+      # Fallback to x64 when ARM unavailable
+      - "r7*" # memory-optimized gen 7
+      - "r6i*" # memory-optimized gen 6 Intel
+      - "r6a*" # memory-optimized gen 6 AMD
+      - "m7*" # general-purpose gen 7
+      - "m6i*" # general-purpose gen 6 Intel
+      - "m6a*" # general-purpose gen 6 AMD
+    spot: false # these tasks might run for longer, thus we want to avoid interruptions
+    extras: s3-cache
+
+
+  # large-arm: ARM equivalent of 'large' runner
+  # - DB building (if ARM compatible)
+  # - large data processing
+  # ARM instances ~9-15% cheaper than x64
+  # spot: false for reliability
+  # disk: 40GB (default)
   large-arm:
-    cpu: 4
+    cpu: 8
     ram: [32]
     disk: large
     family:
