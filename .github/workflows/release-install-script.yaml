@@ -80,6 +80,7 @@ jobs:
         run: |
 
           aws s3 cp install.sh s3://${BUCKET}/${PROJECT_NAME}/${TAG}/install.sh \
+            --region auto \
             --endpoint-url=${ENDPOINT} \
             --content-type "text/plain"
 
@@ -95,6 +96,7 @@ jobs:
           ENDPOINT: ${{ secrets.R2_ENDPOINT }}
         run: |
           aws s3 cp install.sh s3://${BUCKET}/${PROJECT_NAME}/install.sh \
+            --region auto \
             --endpoint-url=${ENDPOINT} \
             --content-type "text/plain"
 
@@ -108,6 +110,7 @@ jobs:
           ENDPOINT: ${{ secrets.R2_ENDPOINT }}
         run: |
           aws s3 cp version s3://${BUCKET}/${PROJECT_NAME}/version \
+            --region auto \
             --endpoint-url=${ENDPOINT} \
             --content-type "text/plain"
 
