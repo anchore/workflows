@@ -124,7 +124,7 @@ jobs:
 
       # maintain backward compatibility by uploading version file to legacy S3 location
       - name: Upload legacy version file (s3)
-        if: ${{ inputs.latest == 'true' }}
+        if: ${{ inputs.latest == true }}
         env:
           TAG: ${{ inputs.tag }}
           PROJECT_NAME: ${{ github.event.repository.name }}
