@@ -1,7 +1,3 @@
-# ============================================================================
-# Update Go Dependencies
-# ============================================================================
-#
 # Description:
 #   Updates one or more Go dependencies to specified versions. Runs `go get`
 #   and `go mod tidy` for each dependency, tracking version changes and
@@ -29,8 +25,6 @@
 #       with:
 #         body: ${{ steps.update.outputs.summary }}
 #         draft: ${{ steps.update.outputs.draft }}
-#
-# ============================================================================
 
 name: "Update Go Dependencies"
 description: "Update one or more Go dependencies"
