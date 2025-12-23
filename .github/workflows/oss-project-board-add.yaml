@@ -49,7 +49,7 @@ jobs:
           GITHUB_EVENT_ISSUE_USER_LOGIN: ${{ github.event.issue.user.login }}
 
       # add all new issues to the project board
-      - uses: actions/add-to-project@31b3f3ccdc584546fc445612dec3f38ff5edb41c #v0.5.0
+      - uses: actions/add-to-project@244f685bbc3b7adfa8466e08b698b5577571133e #v1.0.2
         id: add-issue-to-project
         with:
           project-url: ${{ inputs.project_url }}
