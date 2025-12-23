@@ -1,6 +1,26 @@
+# Description:
+#   Automatically adds new issues to the Anchore OSS community project board.
+#   Issues from community members (non-team users) are tagged with "Community"
+#   as the source field.
+#
+# Permissions:
+#   None declared (authentication via provided token)
+#
+# Required Secrets:
+#   token: Classic GitHub token with project access (repo and project scopes)
+#
+# Usage Example:
+#   jobs:
+#     add-to-board:
+#       uses: anchore/workflows/.github/workflows/oss-project-board-add.yaml@main
+#       secrets:
+#         token: ${{ secrets.PROJECT_TOKEN }}
+
+
 name: Add issues and PRs to the OSS community project board
 
 on:
+  # for use in external repos
   workflow_call:
     inputs:
       project_url:

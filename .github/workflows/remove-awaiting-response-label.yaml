@@ -1,6 +1,25 @@
-# remove-awaiting-response-label.yaml
+# Description:
+#   Manages the "Awaiting Response" triage field on GitHub issues. When a
+#   community member (non-team user) comments on an issue, this workflow
+#   clears the triage field to indicate the issue no longer awaits response.
+#
+# Permissions:
+#   None declared (authentication via provided token)
+#
+# Required Secrets:
+#   token: Classic GitHub token with project access (repo and project scopes)
+#
+# Usage Example:
+#   jobs:
+#     manage-response:
+#       uses: anchore/workflows/.github/workflows/remove-awaiting-response-label.yaml@main
+#       secrets:
+#         token: ${{ secrets.PROJECT_TOKEN }}
+
+
 name: "Manage Awaiting Response"
 on:
+  # for use in external repos
   workflow_call:
     inputs:
       users:

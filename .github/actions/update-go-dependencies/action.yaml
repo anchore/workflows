@@ -1,3 +1,37 @@
+# ============================================================================
+# Update Go Dependencies
+# ============================================================================
+#
+# Description:
+#   Updates one or more Go dependencies to specified versions. Runs `go get`
+#   and `go mod tidy` for each dependency, tracking version changes and
+#   detecting downgrades. Generates a changelog summary for PR descriptions.
+#
+# Inputs:
+#   repos: (required) Comma or newline separated list of repos with versions
+#          e.g., "github.com/anchore/stereoscope@main,github.com/anchore/syft@latest"
+#
+# Outputs:
+#   summary: Markdown changelog detailing version updates
+#   draft:   Whether the PR should be marked as draft (true if downgrade detected)
+#
+# Usage Example:
+#   steps:
+#     - uses: anchore/workflows/.github/actions/update-go-dependencies@main
+#       id: update
+#       with:
+#         repos: |
+#           github.com/anchore/stereoscope@main
+#           github.com/anchore/syft@latest
+#
+#     - name: Create PR
+#       uses: peter-evans/create-pull-request@v5
+#       with:
+#         body: ${{ steps.update.outputs.summary }}
+#         draft: ${{ steps.update.outputs.draft }}
+#
+# ============================================================================
+
 name: "Update Go Dependencies"
 description: "Update one or more Go dependencies"
 inputs:

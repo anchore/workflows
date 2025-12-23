@@ -1,6 +1,27 @@
+# Description:
+#   Performs CodeQL security analysis on Go codebases. Builds the Go project
+#   and runs CodeQL queries to identify potential security vulnerabilities.
+#   Results are uploaded to the GitHub Security tab.
+#
+# Permissions:
+#   security-events: write  # to upload CodeQL results to GitHub Security tab
+#   contents: read          # to checkout the repository
+#
+# Required Secrets:
+#   None
+#
+# Usage Example:
+#   jobs:
+#     codeql:
+#       uses: anchore/workflows/.github/workflows/codeql-go.yaml@main
+#       with:
+#         entrypoint: ./cmd/myapp
+
+
 name: "CodeQL Go Analysis"
 
 on:
+  # for use in external repos
   workflow_call:
     inputs:
       working-directory:
