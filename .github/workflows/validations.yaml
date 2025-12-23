@@ -1,0 +1,35 @@
+name: "Validations"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+on:
+  # note: this is intentionally NOT meant to be used in external repos
+
+  # for use in this repo (anchore/workflows)
+  workflow_dispatch:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+
+  Static-Analysis:
+    # Note: changing this job name requires making the same update in the .github/workflows/release.yaml pipeline
+    name: "Static analysis"
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 #v6.0.1
+        with:
+          persist-credentials: false
+
+      - name: Bootstrap tools
+        uses: ./.github/actions/binny
+
+      - name: Run static analysis
+        run: make static-analysis

@@ -1,0 +1,24 @@
+tools:
+  # we want to use a pinned version of binny to manage the toolchain (so binny manages itself!)
+  - name: binny
+    version:
+      want: v0.11.0
+    method: github-release
+    with:
+      repo: anchore/binny
+
+  # used to validate workflows
+  - name: wrkflw
+    version:
+      want: latest
+    method: github-release
+    with:
+      repo: bahdotsh/wrkflw
+
+  # used for running all local and CI tasks
+  - name: task
+    version:
+      want: v3.46.3
+    method: github-release
+    with:
+      repo: go-task/task

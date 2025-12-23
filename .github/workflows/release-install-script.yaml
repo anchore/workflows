@@ -1,9 +1,39 @@
+# Description:
+#   Uploads install scripts to Cloudflare R2 and AWS S3 storage for releases.
+#   Creates versioned paths ({project}/{tag}/install.sh) and optionally updates
+#   the "latest" path when releasing the most recent version.
+#
+# Permissions:
+#   contents: read  # to checkout the repository at the specified tag
+#
+# Required Secrets:
+#   R2_INSTALL_ACCESS_KEY_ID:      Cloudflare R2 access key ID
+#   R2_INSTALL_SECRET_ACCESS_KEY:  Cloudflare R2 secret access key
+#   R2_ENDPOINT:                   Cloudflare R2 endpoint URL
+#   S3_INSTALL_AWS_ACCESS_KEY_ID:      AWS S3 access key ID (legacy)
+#   S3_INSTALL_AWS_SECRET_ACCESS_KEY:  AWS S3 secret access key (legacy)
+#
+# Usage Example:
+#   jobs:
+#     release-script:
+#       uses: anchore/workflows/.github/workflows/release-install-script.yaml@main
+#       with:
+#         tag: v1.0.0
+#       secrets:
+#         R2_INSTALL_ACCESS_KEY_ID: ${{ secrets.R2_INSTALL_ACCESS_KEY_ID }}
+#         R2_INSTALL_SECRET_ACCESS_KEY: ${{ secrets.R2_INSTALL_SECRET_ACCESS_KEY }}
+#         R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+#         S3_INSTALL_AWS_ACCESS_KEY_ID: ${{ secrets.S3_INSTALL_AWS_ACCESS_KEY_ID }}
+#         S3_INSTALL_AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_INSTALL_AWS_SECRET_ACCESS_KEY }}
+
+
 name: "Release install script"
 
 permissions:
   contents: read
 
 on:
+  # for use in external repos
   workflow_call:
     inputs:
       tag:

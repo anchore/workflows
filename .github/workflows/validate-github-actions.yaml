@@ -1,8 +1,26 @@
+# Description:
+#   Validates GitHub Actions workflows and configurations using the zizmor
+#   linter. Checks for security issues, best practices, and common mistakes
+#   in workflow definitions.
+#
+# Permissions:
+#   contents: read          # to checkout the repository
+#   security-events: write  # to upload SARIF results to GitHub Security tab
+#
+# Required Secrets:
+#   None
+#
+# Usage Example:
+#   jobs:
+#     validate:
+#       uses: anchore/workflows/.github/workflows/validate-github-actions.yaml@main
+
+
 name: "Validate GitHub Actions"
 
 on:
+  # for checks in this repo (anchore/workflows)
   workflow_dispatch:
-  workflow_call:
   pull_request:
     paths:
       - '.github/workflows/**'
@@ -13,6 +31,9 @@ on:
     paths:
       - '.github/workflows/**'
       - '.github/actions/**'
+
+  # for use in external repos
+  workflow_call:
 
 permissions:
   contents: read

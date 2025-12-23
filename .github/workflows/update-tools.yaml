@@ -1,9 +1,30 @@
+# Description:
+#   Creates pull requests to update tool versions to their latest releases.
+#   Runs on a daily schedule and can be triggered manually. Uses the project's
+#   Makefile targets (update-tools, list-tools, list-tool-updates) to detect
+#   and apply version updates.
+#
+# Permissions:
+#   contents: read  # to checkout the repository
+#
+# Required Secrets:
+#   TOKEN_APP_ID:          GitHub App ID for creating PRs
+#   TOKEN_APP_PRIVATE_KEY: GitHub App private key for authentication
+#
+# Usage Example:
+#   jobs:
+#     update-tools:
+#       uses: anchore/workflows/.github/workflows/update-tools.yaml.yml@main
+
+
 name: PR for latest versions of tools
 on:
+  # for use in this repo (anchore/workflows)
+  workflow_dispatch:
   schedule:
     - cron: "0 8 * * *" # 3 AM EST
 
-  workflow_dispatch:
+  # for use in external repos
   workflow_call:
 
 permissions:
@@ -16,12 +37,6 @@ jobs:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 #v6.0.1
         with:
           persist-credentials: false
-
-      - name: Bootstrap environment
-        uses: ./.github/actions/bootstrap
-        with:
-          bootstrap-apt-packages: ""
-          go-dependencies: false
 
       - name: "Update tool versions"
         id: latest-versions

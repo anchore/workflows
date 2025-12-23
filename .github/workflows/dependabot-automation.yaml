@@ -1,8 +1,29 @@
-# see https://docs.github.com/en/code-security/dependabot/working-with-dependabot/automating-dependabot-with-github-actions#enable-auto-merge-on-a-pull-request
+# Description:
+#   Automates handling of Dependabot pull requests by auto-approving them.
+#   Only runs when the PR author is dependabot[bot].
+#
+# Reference:
+#   https://docs.github.com/en/code-security/dependabot/working-with-dependabot/automating-dependabot-with-github-actions#enable-auto-merge-on-a-pull-request
+#
+# Permissions:
+#   pull-requests: write  # to approve the PR
+#
+# Required Secrets:
+#   None (uses automatic GITHUB_TOKEN)
+#
+# Usage Example:
+#   jobs:
+#     dependabot:
+#       uses: anchore/workflows/.github/workflows/dependabot-automation.yaml@main
+
 
 name: Dependabot Automation
 
 on:
+  # for checks in this repo (anchore/workflows)
+  pull_request:
+
+  # for use in external repos
   workflow_call:
     inputs:
       approve:
