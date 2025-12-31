@@ -1,0 +1,42 @@
+name: "Python"
+description: "Set up Python environment with uv and dependencies"
+
+inputs:
+  python-version:
+    description: "Python version to use"
+    required: false
+    default: "3.13"
+  uv-version:
+    description: "UV version to use"
+    required: false
+    default: "0.7.x"
+  cache-key-prefix:
+    description: "Cache key prefix for tool caching"
+    required: false
+    default: "181053ac82"
+
+runs:
+  using: "composite"
+  steps:
+    - name: Install uv
+      uses: astral-sh/setup-uv@681c641aba71e4a1c380be3ab5e12ad51f415867 # v7.1.6
+      with:
+        version: ${{ inputs.uv-version }}
+        enable-cache: true
+
+    - name: Set up Python
+      uses: actions/setup-python@83679a892e2d95755f2dac6acb0bfd1e9ac5d548 # v6.1.0
+      with:
+        python-version: ${{ inputs.python-version }}
+
+    - name: Restore tool cache
+      if: inputs.tools == 'true'
+      id: tool-cache
+      uses: actions/cache@9255dc7a253b0ccc959486e2bca901246202afeb # v5.0.1
+      with:
+        path: ${{ github.workspace }}/.tool
+        key: ${{ inputs.cache-key-prefix }}-${{ runner.os }}-tool-${{ hashFiles('.binny.yaml') }}
+
+    - name: Install project dependencies
+      shell: bash
+      run: uv sync --extra dev

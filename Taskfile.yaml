@@ -1,6 +1,10 @@
 version: "3"
 
 
+includes:
+  py:
+    taskfile: ./task.d/python.yaml
+
 vars:
   OWNER: anchore
   PROJECT: workflows
@@ -80,7 +84,7 @@ tasks:
   ## Static analysis tasks #################################
 
   lint:
-    desc: Link github workflows
+    desc: Lint github workflows
     deps: [tools]
     cmds:
       - "{{ .TOOL_DIR}}/wrkflw validate"

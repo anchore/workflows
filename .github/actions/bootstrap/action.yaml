@@ -1,0 +1,26 @@
+name: "Bootstrap"
+description: "Bootstrap complete development environment (tools + Python)"
+
+inputs:
+  python-version:
+    description: "Python version to use"
+    required: false
+    default: "3.13"
+  cache-key-prefix:
+    description: "Cache key prefix for tool caching"
+    required: false
+    default: "181053ac82"
+
+runs:
+  using: "composite"
+  steps:
+    - name: Bootstrap tools
+      uses: ./.github/actions/binny
+      with:
+        cache-key-prefix: ${{ inputs.cache-key-prefix }}
+
+    - name: Bootstrap Python
+      uses: ./.github/actions/python
+      with:
+        python-version: ${{ inputs.python-version }}
+        cache-key-prefix: ${{ inputs.cache-key-prefix }}
