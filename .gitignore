@@ -4,3 +4,16 @@
 
 # tooling
 .tool
+specs
+
+# python
+.venv
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.pdb
+*.egg-info/
+.eggs/
+dist/
+build/

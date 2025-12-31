@@ -1,0 +1,48 @@
+version: "3"
+
+vars:
+  PYTHON_SRC_DIR: src/runson
+  PYTHON_TEST_DIR: tests
+
+tasks:
+  static-analysis:
+    desc: Run all Python static analysis tasks
+    cmds:
+      - task: lint
+      - task: format-check
+      - task: check-types
+
+  lint:
+    desc: Run ruff linter on Python code
+    cmds:
+      - uv run ruff check .
+
+  lint-fix:
+    desc: Run ruff linter with auto-fix
+    cmds:
+      - uv run ruff check . --fix
+
+  format:
+    desc: Format Python code with ruff
+    cmds:
+      - uv run ruff format .
+
+  format-check:
+    desc: Check Python code formatting
+    cmds:
+      - uv run ruff format --check .
+
+  check-types:
+    desc: Run mypy type checker
+    cmds:
+      - uv run mypy --config-file ./pyproject.toml {{ .PYTHON_SRC_DIR }}
+
+  test:
+    desc: Run Python tests with pytest
+    cmds:
+      - uv run pytest {{ .PYTHON_TEST_DIR }} -v
+
+  test-cov:
+    desc: Run Python tests with coverage
+    cmds:
+      - uv run pytest {{ .PYTHON_TEST_DIR }} -v --cov={{ .PYTHON_SRC_DIR }} --cov-report=html
