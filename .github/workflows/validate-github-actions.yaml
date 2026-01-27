@@ -22,15 +22,9 @@ on:
   # for checks in this repo (anchore/workflows)
   workflow_dispatch:
   pull_request:
-    paths:
-      - '.github/workflows/**'
-      - '.github/actions/**'
   push:
     branches:
       - main
-    paths:
-      - '.github/workflows/**'
-      - '.github/actions/**'
 
   # for use in external repos
   workflow_call:
