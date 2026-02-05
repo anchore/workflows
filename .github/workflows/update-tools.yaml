@@ -41,6 +41,7 @@ jobs:
       - name: "Update tool versions"
         id: latest-versions
         run: |
+          make tools
           make update-tools
           make list-tools
           
