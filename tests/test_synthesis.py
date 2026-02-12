@@ -70,3 +70,32 @@ class TestSynthesizeGlobs:
 
         # result should be sorted and have no duplicates
         assert result == sorted(set(result))
+
+    def test_filtered_universe_allows_broader_globs(self, sample_instances: list[dict]):
+        """When universe is pre-filtered, globs should be broader since expensive variants are excluded."""
+        # select only m7i.large (cheapest m7i instance at $0.096)
+        selected = [i for i in sample_instances if i["api_name"] == "m7i.large"]
+
+        # with full universe, budget of $0.10 would force exact name since m7i.xlarge is $0.192
+        result_full_universe = synthesize_globs(selected, sample_instances, budget=0.10)
+        assert "m7i.large" in result_full_universe  # forced to exact name
+
+        # with filtered universe (only m7i.large), budget check passes and allows glob
+        result_filtered_universe = synthesize_globs(selected, selected, budget=0.10)
+        # should allow broader glob since no expensive instances in universe
+        assert "m7*" in result_filtered_universe or "m7i*" in result_filtered_universe
+
+    def test_filtered_universe_respects_constraints(self, sample_instances: list[dict]):
+        """Globs generated with filtered universe only consider instances in that universe."""
+        # filter to only instances with 2 vCPUs and <=16GB RAM
+        filtered = [i for i in sample_instances if i["vcpus"] == 2 and i["memory_gb"] <= 16]
+
+        # select m7 instances from filtered set
+        selected = [i for i in filtered if i["api_name"].startswith("m7")]
+
+        # use filtered set as both selected and universe
+        result = synthesize_globs(selected, filtered, budget=0.15)
+
+        # with filtered universe, m7* glob max price is only the 2 vCPU variants
+        # m7i.large=$0.096, m7a.large=$0.102, m7g.large=$0.082 - all under budget
+        assert "m7*" in result

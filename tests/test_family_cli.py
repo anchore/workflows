@@ -138,3 +138,69 @@ class TestFamilyCliCpuRamFilters:
         # check that requirements are shown in the output
         assert "cpu=4:8" in result.output
         assert "ram=16:32GB" in result.output
+
+
+class TestFamilyCliGlobsWithFilters:
+    """Tests for --globs flag with cpu/mem/budget filters."""
+
+    def test_globs_stats_reflect_filtered_instances(self, runner: CliRunner, mock_csv_path: Path, runs_on_yml: Path):
+        """Verify glob stats (CPU, RAM ranges) only reflect filtered instances."""
+        result = runner.invoke(
+            family,
+            ["m7*", "--cpu", "2", "--mem", "8", "--globs", "-c", str(runs_on_yml)],
+        )
+
+        assert result.exit_code == 0
+        # output should show m7* glob with stats matching the filter
+        assert "m7*" in result.output
+        # stats should show "2 CPU" not "2-8 CPU" since we filtered to cpu=2
+        assert "2 CPU" in result.output
+        # stats should show "8GB" not "8-32GB" since we filtered to mem=8
+        assert "8GB" in result.output
+        # should NOT see larger CPU/RAM values in the stats
+        assert "2-8 CPU" not in result.output
+        assert "8-32GB" not in result.output
+
+    def test_globs_with_budget_uses_filtered_universe(self, runner: CliRunner, mock_csv_path: Path, runs_on_yml: Path):
+        """Verify budget check uses filtered universe, allowing broader globs."""
+        # filter to only 2 vCPU instances, then check if m7* glob is allowed
+        # m7i.large=$0.096, m7a.large=$0.102, m7g.large=$0.082 - all under $0.15
+        result = runner.invoke(
+            family,
+            ["m7*", "--cpu", "2", "--budget", "0.15", "--globs", "-c", str(runs_on_yml)],
+        )
+
+        assert result.exit_code == 0
+        # with filtered universe (only 2 vCPU m7 instances), m7* should be under budget
+        # before the fix, this would check against m7i.2xlarge ($0.384) and refine to exact names
+        assert "m7*" in result.output
+
+    def test_globs_price_range_reflects_filtered_instances(
+        self, runner: CliRunner, mock_csv_path: Path, runs_on_yml: Path
+    ):
+        """Verify price ranges in glob output only reflect filtered instances."""
+        result = runner.invoke(
+            family,
+            ["m7*", "--cpu", "2", "--globs", "-c", str(runs_on_yml)],
+        )
+
+        assert result.exit_code == 0
+        # m7 instances with 2 vCPUs: m7i.large=$0.096, m7a.large=$0.102, m7g.large=$0.082
+        # price range should be ~$0.08-$0.10, not include $0.384 from m7i.2xlarge
+        assert "$0.08" in result.output or "$0.09" in result.output or "$0.10" in result.output
+        # should NOT show prices from larger instances
+        assert "$0.38" not in result.output
+        assert "$0.19" not in result.output
+
+    def test_globs_with_cpu_mem_range_filters(self, runner: CliRunner, mock_csv_path: Path, runs_on_yml: Path):
+        """Verify globs work correctly with CPU and RAM range filters."""
+        result = runner.invoke(
+            family,
+            ["m7*", "--cpu", "2:4", "--mem", "8:16", "--globs", "-c", str(runs_on_yml)],
+        )
+
+        assert result.exit_code == 0
+        assert "m7*" in result.output
+        # stats should show the filtered range
+        assert "2-4 CPU" in result.output
+        assert "8-16GB" in result.output
