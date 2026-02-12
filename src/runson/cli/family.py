@@ -381,8 +381,18 @@ def family(
         for rc in runner_configs.values():
             all_patterns.update(rc["families"])
         patterns = list(all_patterns)
+        cpu_req = cli_cpu
+        ram_req = cli_ram
         click.echo(util.C.dim(f"Using {len(patterns)} patterns from configured runners"))
-        click.echo(util.C.dim("(cpu/ram requirements vary by runner)"))
+        if cpu_req or ram_req:
+            reqs = []
+            if cpu_req:
+                reqs.append(format_req("cpu", cpu_req))
+            if ram_req:
+                reqs.append(format_req("ram", ram_req) + "GB")
+            click.echo(util.C.dim(f"Requirements: {', '.join(reqs)}"))
+        else:
+            click.echo(util.C.dim("(cpu/ram requirements vary by runner)"))
     else:
         raise click.ClickException("No selectors provided and no runs-on.yml found")
 
