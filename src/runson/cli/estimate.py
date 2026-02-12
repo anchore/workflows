@@ -562,7 +562,10 @@ def estimate(run: str, cfg: Path | None, no_fetch_config: bool) -> None:
     click.echo(f"  {util.C.bold('TOTAL COST ESTIMATE')}")
     click.echo(util.C.bold("━" * 80))
 
-    click.echo(f"\n  {util.C.bold(util.C.green(f'${total_lower:.2f}'))} {util.C.dim('(spot pricing)')}")
     if total_lower != total_upper:
-        click.echo(f"  {util.C.dim(f'${total_upper:.2f} (on-demand fallback)')}")
+        low = util.C.bold(util.C.green(f"${total_lower:.2f}"))
+        high = util.C.bold(f"${total_upper:.2f}")
+        click.echo(f"\n  {low} - {high} {util.C.dim('(best to worst case)')}")
+    else:
+        click.echo(f"\n  {util.C.bold(util.C.green(f'${total_lower:.2f}'))}")
     click.echo()
