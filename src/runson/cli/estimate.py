@@ -512,7 +512,9 @@ def estimate(run: str, cfg: Path | None, no_fetch_config: bool) -> None:
                 total_upper += cost_upper
 
                 cost_str = f"${cost_lower:.3f}"
-                detail = f"{min_inst} @ ${min_price:.2f}/hr"
+                use_spot = core.matching._is_spot_enabled(runner_config.get("spot"))
+                spot_indicator = "spot, " if use_spot else ""
+                detail = f"{spot_indicator}{min_inst} @ ${min_price:.2f}/hr"
                 runner_display = util.C.cyan(runner_display_name or "inline")
             else:
                 cost_str = "?"
@@ -560,7 +562,7 @@ def estimate(run: str, cfg: Path | None, no_fetch_config: bool) -> None:
     click.echo(f"  {util.C.bold('TOTAL COST ESTIMATE')}")
     click.echo(util.C.bold("━" * 80))
 
-    click.echo(f"\n  {util.C.bold(util.C.green(f'${total_lower:.2f}'))} {util.C.dim('(estimated actual)')}")
+    click.echo(f"\n  {util.C.bold(util.C.green(f'${total_lower:.2f}'))} {util.C.dim('(spot pricing)')}")
     if total_lower != total_upper:
-        click.echo(f"  {util.C.dim(f'${total_lower:.2f} - ${total_upper:.2f} (possible range)')}")
+        click.echo(f"  {util.C.dim(f'${total_upper:.2f} (on-demand fallback)')}")
     click.echo()
