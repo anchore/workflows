@@ -112,16 +112,39 @@ def find_matching_runners(
     return matching
 
 
+def _is_spot_enabled(spot_value: bool | str | None) -> bool:
+    """Check if spot is enabled based on config value.
+
+    Spot is disabled only when explicitly set to False or "false".
+    Any other value (True, "true", "lco", "price-capacity-optimized", etc.) means enabled.
+    """
+    if spot_value is None:
+        return True  # default to spot enabled
+    if isinstance(spot_value, bool):
+        return spot_value
+    if isinstance(spot_value, str):
+        return spot_value.lower() != "false"
+    return True
+
+
 def get_runner_price_range(
     runner_config: dict, instances: list[dict]
 ) -> tuple[float | None, float | None, str | None, str | None]:
     """Get min/max price for a runner's family list.
 
     Returns (min_price, max_price, min_instance_name, max_instance_name).
+
+    When spot is enabled in runner_config:
+    - min_price is optimistic (spot pricing was used)
+    - max_price is pessimistic (fell back to on-demand)
+
+    When spot is disabled, both use on-demand pricing.
     """
     families = runner_config.get("families", [])
     if not families:
         return None, None, None, None
+
+    use_spot = _is_spot_enabled(runner_config.get("spot"))
 
     matching = []
     for inst in instances:
@@ -142,13 +165,24 @@ def get_runner_price_range(
     if not matching:
         return None, None, None, None
 
+    # sort by on-demand price to find cheapest/most expensive instances
     matching.sort(key=lambda x: x["price"])
     cheapest = matching[0]
     most_expensive = matching[-1]
 
+    if use_spot:
+        # optimistic: spot price of cheapest instance (if available)
+        # pessimistic: on-demand price of most expensive (fallback scenario)
+        min_price = cheapest.get("spot") or cheapest["price"]
+        max_price = most_expensive["price"]
+    else:
+        # spot disabled: use on-demand for both
+        min_price = cheapest["price"]
+        max_price = most_expensive["price"]
+
     return (
-        cheapest["price"],
-        most_expensive["price"],
+        min_price,
+        max_price,
         cheapest["api_name"],
         most_expensive["api_name"],
     )
