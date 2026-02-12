@@ -425,8 +425,8 @@ def family(
 
     # print results
     if globs:
-        glob_patterns = core.synthesis.synthesize_globs(filtered, instances, budget)
-        print_globs(glob_patterns, instances, sort)
+        glob_patterns = core.synthesis.synthesize_globs(filtered, filtered, budget)
+        print_globs(glob_patterns, filtered, sort)
     elif output == "yaml":
         print_yaml(filtered, sort)
     else:
