@@ -46,8 +46,9 @@ def filter_instances(
     arches: list[str] | None = None,
     max_price: float | None = None,
     ebs_min: int | None = None,
+    nvme: bool | None = None,
 ) -> list[dict]:
-    """Filter instances by family patterns and cpu/ram/arch/price/ebs requirements.
+    """Filter instances by family patterns and cpu/ram/arch/price/ebs/nvme requirements.
 
     CPU and RAM use exact matching (or range if specified).
     """
@@ -75,6 +76,10 @@ def filter_instances(
 
         # check EBS bandwidth minimum
         if ebs_min is not None and (inst["ebs_mbps"] is None or inst["ebs_mbps"] < ebs_min):
+            continue
+
+        # check local NVMe storage requirement
+        if nvme is not None and inst.get("nvme", False) != nvme:
             continue
 
         result.append(inst)

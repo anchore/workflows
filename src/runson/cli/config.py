@@ -168,6 +168,9 @@ def load_instances(csv_path: Path | Traversable | None = None) -> list[dict]:
             on_demand = util.parse_hourly_cost(row.get("On Demand", ""))
             spot = util.parse_hourly_cost(row.get("Linux Spot Minimum cost", ""))
             ebs_mbps = util.parse_ebs_bandwidth(row.get("EBS Optimized: Baseline Bandwidth", ""))
+            instance_storage = row.get("Instance Storage", "")
+            has_nvme = util.parse_has_local_nvme(instance_storage)
+            local_storage_gb = util.parse_local_storage_gb(instance_storage)
 
             if api_name and vcpus is not None and memory_gb is not None:
                 instances.append(
@@ -179,6 +182,8 @@ def load_instances(csv_path: Path | Traversable | None = None) -> list[dict]:
                         "spot": spot,
                         "arch": _infer_arch(api_name),
                         "ebs_mbps": ebs_mbps,
+                        "nvme": has_nvme,
+                        "nvme_gb": local_storage_gb,
                     }
                 )
     finally:

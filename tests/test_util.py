@@ -8,6 +8,7 @@ from runson.cli.util import (
     format_duration,
     format_range,
     parse_ebs_bandwidth,
+    parse_has_local_nvme,
     parse_hourly_cost,
     parse_memory_gb,
     parse_vcpus,
@@ -132,6 +133,35 @@ class TestParseEbsBandwidth:
     )
     def test_invalid_inputs(self, input_str: str | None):
         assert parse_ebs_bandwidth(input_str) is None
+
+
+class TestParseHasLocalNvme:
+    """Tests for parse_has_local_nvme function."""
+
+    @pytest.mark.parametrize(
+        "input_str",
+        [
+            "1900 GB NVMe SSD",
+            "118 GB NVMe SSD",
+            "1200 GB (2×600 GB NVMe SSD)",
+            "30400 GB (8×3800 GB NVMe SSD)",
+            "3800 GB nvme ssd",  # lowercase
+        ],
+    )
+    def test_has_nvme(self, input_str: str):
+        assert parse_has_local_nvme(input_str) is True
+
+    @pytest.mark.parametrize(
+        "input_str",
+        [
+            "EBS only",
+            "ebs only",  # lowercase
+            "",
+            None,
+        ],
+    )
+    def test_no_nvme(self, input_str: str | None):
+        assert parse_has_local_nvme(input_str) is False
 
 
 class TestFormatDuration:
