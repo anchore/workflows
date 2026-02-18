@@ -115,9 +115,9 @@ class TestLoadInstances:
     def test_loads_from_path(self, sample_csv_path: Path):
         instances = load_instances(sample_csv_path)
 
-        assert len(instances) == 15
+        assert len(instances) == 18
 
-        # verify first instance
+        # verify non-NVMe instance
         m7i_large = next(i for i in instances if i["api_name"] == "m7i.large")
         assert m7i_large["vcpus"] == 2
         assert m7i_large["memory_gb"] == 8.0
@@ -125,6 +125,11 @@ class TestLoadInstances:
         assert m7i_large["spot"] == 0.038
         assert m7i_large["arch"] == "x86_64"
         assert m7i_large["ebs_mbps"] == 10000
+        assert m7i_large["nvme"] is False
+
+        # verify NVMe instance
+        m7gd_large = next(i for i in instances if i["api_name"] == "m7gd.large")
+        assert m7gd_large["nvme"] is True
 
     def test_infers_architectures(self, sample_csv_path: Path):
         instances = load_instances(sample_csv_path)

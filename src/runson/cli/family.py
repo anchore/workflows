@@ -33,6 +33,7 @@ def print_table(
     instances: list[dict],
     runner_configs: dict[str, dict],
     sort_by: str,
+    show_nvme_storage: bool = False,
 ) -> None:
     """Print formatted table of instances."""
     if not instances:
@@ -50,17 +51,29 @@ def print_table(
     max_api = max(len(inst["api_name"]) for inst in sorted_instances)
     max_api = max(max_api, 8)  # minimum width
 
-    # print header
-    header = (
-        f"{'API Name':<{max_api}}  "
-        f"{'Price':>8}  "
-        f"{'Spot':>8}  "
-        f"{'Arch':<7}  "
-        f"{'Memory':>8}  "
-        f"{'vCPUs':>5}  "
-        f"{'EBS Mbps':>10}  "
-        f"Matched By"
-    )
+    # build header based on whether we're showing NVMe storage
+    if show_nvme_storage:
+        header = (
+            f"{'API Name':<{max_api}}  "
+            f"{'Price':>8}  "
+            f"{'Spot':>8}  "
+            f"{'Arch':<7}  "
+            f"{'Memory':>8}  "
+            f"{'vCPUs':>5}  "
+            f"{'NVMe':>8}  "
+            f"Matched By"
+        )
+    else:
+        header = (
+            f"{'API Name':<{max_api}}  "
+            f"{'Price':>8}  "
+            f"{'Spot':>8}  "
+            f"{'Arch':<7}  "
+            f"{'Memory':>8}  "
+            f"{'vCPUs':>5}  "
+            f"{'EBS Mbps':>10}  "
+            f"Matched By"
+        )
     click.echo(util.C.bold(header))
     click.echo(util.C.dim("-" * len(header.replace("Matched By", "Matched By" + " " * 20))))
 
@@ -75,8 +88,15 @@ def print_table(
         arch = f"{inst['arch']:<7}"
         memory = f"{inst['memory_gb']:>6.0f}GB"
         vcpus = f"{inst['vcpus']:>5}"
-        ebs = f"{inst['ebs_mbps']:>10}" if inst["ebs_mbps"] else "       N/A"
         matched = ", ".join(matching_runners) if matching_runners else ""
+
+        if show_nvme_storage:
+            # show NVMe storage in GB
+            nvme_gb = inst.get("nvme_gb")
+            storage = f"{nvme_gb:>6}GB" if nvme_gb else "     N/A"
+        else:
+            # show EBS bandwidth
+            storage = f"{inst['ebs_mbps']:>10}" if inst["ebs_mbps"] else "       N/A"
 
         # color based on whether matched by any runner
         if matching_runners:
@@ -87,7 +107,7 @@ def print_table(
                 f"{arch}  "
                 f"{memory}  "
                 f"{vcpus}  "
-                f"{ebs}  "
+                f"{storage}  "
                 f"{util.C.cyan(matched)}"
             )
         else:
@@ -98,7 +118,7 @@ def print_table(
                 f"{util.C.dim(arch)}  "
                 f"{util.C.dim(memory)}  "
                 f"{util.C.dim(vcpus)}  "
-                f"{util.C.dim(ebs)}  "
+                f"{util.C.dim(storage)}  "
                 f"{matched}"
             )
         click.echo(row)
@@ -126,19 +146,142 @@ def print_yaml(
     for inst in sorted_instances:
         price_str = f"${inst['price']:.4f}" if inst["price"] else "N/A"
         memory_str = f"{inst['memory_gb']:.0f}GB"
-        ebs_str = f"{inst['ebs_mbps']} Mbps" if inst["ebs_mbps"] else "N/A"
         category = core.inference.get_instance_category(inst["api_name"])
         name_col = f'"{inst["api_name"]}"'.ljust(max_width)
-        click.echo(
-            f"- {name_col}  # {category}, {inst['arch']}, {memory_str}, {inst['vcpus']} CPU, {ebs_str}, {price_str}/hr"
-        )
+
+        # build storage info: NVMe if present, otherwise EBS bandwidth
+        nvme_gb = inst.get("nvme_gb")
+        if nvme_gb:
+            storage_str = f"NVMe:{nvme_gb}GB"
+        elif inst["ebs_mbps"]:
+            storage_str = f"EBS:{inst['ebs_mbps']}Mbps"
+        else:
+            storage_str = "EBS:N/A"
+
+        comment = f"{category}, {inst['arch']}, {memory_str}, {inst['vcpus']} CPU, {storage_str}, {price_str}/hr"
+        click.echo(f"- {name_col}  # {comment}")
 
 
-def print_globs(globs: list[str], instances: list[dict], sort_by: str = "price") -> None:
+def format_command(
+    selectors: list[str] | None,
+    cpu_req: config.Requirement | None,
+    ram_req: config.Requirement | None,
+    arches: list[str] | None,
+    budget: float | None,
+    nvme: bool,
+    runner: str | None,
+    excludes: list[str] | None = None,
+) -> str:
+    """Reconstruct the runson family command from parameters.
+
+    Only includes explicit CLI selectors, not patterns derived from config.
+    """
+    parts = ["runson", "family"]
+
+    # selectors: only include if explicitly provided on CLI (not from config)
+    # runner mode or config-derived patterns should not list all selectors
+    if selectors and not runner:
+        for s in selectors:
+            parts.append(f'"{s}"')
+
+    # runner
+    if runner:
+        parts.append(f"--runner={runner}")
+
+    # cpu
+    if cpu_req:
+        if cpu_req.max_val is not None:
+            parts.append(f'--cpu="{cpu_req.min_val}:{cpu_req.max_val}"')
+        else:
+            parts.append(f"--cpu={cpu_req.min_val}")
+
+    # ram
+    if ram_req:
+        if ram_req.max_val is not None:
+            parts.append(f'--mem="{ram_req.min_val}:{ram_req.max_val}"')
+        else:
+            parts.append(f"--mem={ram_req.min_val}")
+
+    # arch
+    if arches:
+        for arch in arches:
+            parts.append(f"--arch={arch}")
+
+    # budget
+    if budget:
+        parts.append(f"--budget={budget}")
+
+    # nvme
+    if nvme:
+        parts.append("--local-nvme")
+
+    # excludes
+    if excludes:
+        for exc in excludes:
+            parts.append(f'--exclude="{exc}"')
+
+    # always include -o yaml and --globs since this is only called for globs output
+    parts.append("-o yaml")
+    parts.append("--globs")
+
+    return " ".join(parts)
+
+
+def format_runson_label(
+    cpu_req: config.Requirement | None,
+    ram_req: config.Requirement | None,
+    families: list[str],
+) -> str:
+    """Format query parameters as a runs-on label line."""
+    parts = []
+
+    # cpu
+    if cpu_req:
+        if cpu_req.max_val is not None:
+            parts.append(f"cpu={cpu_req.min_val}+{cpu_req.max_val}")
+        else:
+            parts.append(f"cpu={cpu_req.min_val}")
+
+    # ram
+    if ram_req:
+        if ram_req.max_val is not None:
+            parts.append(f"ram={ram_req.min_val}+{ram_req.max_val}")
+        else:
+            parts.append(f"ram={ram_req.min_val}")
+
+    # family (from the synthesized globs, without asterisks for cleaner output)
+    family_prefixes = sorted({g.rstrip("*").rstrip(".") for g in families})
+    if family_prefixes:
+        parts.append(f"family={'+'.join(family_prefixes)}")
+
+    return "/" + "/".join(parts)
+
+
+def print_globs(
+    globs: list[str],
+    instances: list[dict],
+    sort_by: str = "price",
+    cpu_req: config.Requirement | None = None,
+    ram_req: config.Requirement | None = None,
+    arches: list[str] | None = None,
+    nvme: bool = False,
+    selectors: list[str] | None = None,
+    budget: float | None = None,
+    runner: str | None = None,
+    excludes: list[str] | None = None,
+) -> None:
     """Print synthesized glob patterns as YAML with stats."""
     if not globs:
         click.echo(util.C.yellow("No patterns to display."))
         return
+
+    # print command used to generate this output
+    cmd = format_command(selectors, cpu_req, ram_req, arches, budget, nvme, runner, excludes)
+    click.echo(f"# {cmd}")
+
+    # print runs-on label
+    label = format_runson_label(cpu_req, ram_req, globs)
+    click.echo(f"# {label}")
 
     # calculate min price for each glob for sorting
     def get_glob_min_price(glob: str) -> float:
@@ -183,9 +326,15 @@ def print_globs(globs: list[str], instances: list[dict], sort_by: str = "price")
         mems = [int(i["memory_gb"]) for i in matching]
         mem_str = util.format_range(mems, "GB")
 
-        # ebs bandwidth range
+        # storage info: NVMe if present, otherwise EBS bandwidth
+        nvme_vals = [i["nvme_gb"] for i in matching if i.get("nvme_gb") is not None]
         ebs_vals = [i["ebs_mbps"] for i in matching if i["ebs_mbps"] is not None]
-        ebs_str = util.format_range(ebs_vals, " Mbps") if ebs_vals else "N/A"
+        if nvme_vals:
+            storage_str = "NVMe:" + util.format_range(nvme_vals, "GB")
+        elif ebs_vals:
+            storage_str = "EBS:" + util.format_range(ebs_vals, "Mbps")
+        else:
+            storage_str = "EBS:N/A"
 
         # price range
         prices = [i["price"] for i in matching if i["price"] is not None]
@@ -196,7 +345,81 @@ def print_globs(globs: list[str], instances: list[dict], sort_by: str = "price")
             price_str = "N/A"
 
         glob_col = f'"{glob}"'.ljust(max_width)
-        click.echo(f"- {glob_col}  # {category}, {arch_str}, {cpu_str}, {mem_str}, {ebs_str}, {price_str}")
+        click.echo(f"- {glob_col}  # {category}, {arch_str}, {cpu_str}, {mem_str}, {storage_str}, {price_str}")
+
+
+def format_summary(instances: list[dict]) -> str:
+    """Format a one-line summary of resource and cost ranges for all instances."""
+    if not instances:
+        return "no instances"
+
+    # categories
+    categories = sorted({core.inference.get_instance_category(i["api_name"]) for i in instances})
+    cat_str = "/".join(categories)
+
+    # architectures
+    arches = sorted({i["arch"] for i in instances})
+    arch_str = "/".join(arches)
+
+    # cpu range
+    cpus = [i["vcpus"] for i in instances]
+    cpu_str = util.format_range(cpus, " CPU")
+
+    # memory range
+    mems = [int(i["memory_gb"]) for i in instances]
+    mem_str = util.format_range(mems, "GB")
+
+    # storage info
+    nvme_vals = [i["nvme_gb"] for i in instances if i.get("nvme_gb") is not None]
+    ebs_vals = [i["ebs_mbps"] for i in instances if i["ebs_mbps"] is not None]
+    if nvme_vals:
+        storage_str = "NVMe:" + util.format_range(nvme_vals, "GB")
+    elif ebs_vals:
+        storage_str = "EBS:" + util.format_range(ebs_vals, "Mbps")
+    else:
+        storage_str = "EBS:N/A"
+
+    # price range
+    prices = [i["price"] for i in instances if i["price"] is not None]
+    if prices:
+        min_p, max_p = min(prices), max(prices)
+        price_str = f"${min_p:.2f}/hr" if min_p == max_p else f"${min_p:.2f}-${max_p:.2f}/hr"
+    else:
+        price_str = "N/A"
+
+    return f"{cat_str}, {arch_str}, {cpu_str}, {mem_str}, {storage_str}, {price_str}"
+
+
+def print_label(
+    globs: list[str],
+    instances: list[dict],
+    cpu_req: config.Requirement | None = None,
+    ram_req: config.Requirement | None = None,
+    arches: list[str] | None = None,
+    nvme: bool = False,
+    selectors: list[str] | None = None,
+    budget: float | None = None,
+    runner: str | None = None,
+    excludes: list[str] | None = None,
+) -> None:
+    """Print runs-on label with command and summary comments."""
+    if not globs:
+        click.echo(util.C.yellow("No patterns to display."))
+        return
+
+    # print command used to generate this output
+    cmd = format_command(selectors, cpu_req, ram_req, arches, budget, nvme, runner, excludes)
+    # replace -o yaml --globs with -o label for label output
+    cmd = cmd.replace("-o yaml --globs", "-o label")
+    click.echo(f"# {cmd}")
+
+    # print summary of all selected instances
+    summary = format_summary(instances)
+    click.echo(f"# {summary}")
+
+    # print runs-on label line
+    label = format_runson_label(cpu_req, ram_req, globs)
+    click.echo(f"runs-on: runs-on=${{{{ github.run_id }}}}{label}")
 
 
 def format_req(name: str, req: config.Requirement) -> str:
@@ -219,9 +442,15 @@ def format_req(name: str, req: config.Requirement) -> str:
 @click.option(
     "-o",
     "--output",
-    type=click.Choice(["list", "yaml"]),
+    type=click.Choice(["list", "yaml", "label"]),
     default="list",
-    help="Output format: list (table) or yaml (for copy-paste)",
+    help="Output format: list (table), yaml (for copy-paste), or label (runs-on label)",
+)
+@click.option(
+    "--exclude",
+    "excludes",
+    multiple=True,
+    help="Exclude patterns from output (glob syntax). Can be comma-separated or specified multiple times.",
 )
 @click.option(
     "--pick-family",
@@ -241,6 +470,11 @@ def format_req(name: str, req: config.Requirement) -> str:
     help="Only show instances below this hourly price (on-demand)",
 )
 @click.option("--ebs-min", type=int, metavar="MBPS", help="Minimum EBS bandwidth in Mbps")
+@click.option(
+    "--local-nvme",
+    is_flag=True,
+    help="Only show instances with local NVMe SSD storage",
+)
 @click.option(
     "--for-tmpfs",
     is_flag=True,
@@ -265,10 +499,12 @@ def family(
     mem: str | None,
     runner: str | None,
     output: str,
+    excludes: tuple[str, ...],
     pick_family: bool,
     arches: tuple[str, ...],
     budget: float | None,
     ebs_min: int | None,
+    local_nvme: bool,
     for_tmpfs: bool,
     globs: bool,
     cfg: Path | None,
@@ -409,6 +645,11 @@ def family(
             click.echo(util.C.dim("tmpfs mode: using specified RAM requirement"))
     click.echo()
 
+    # parse excludes (handle comma-separated values)
+    exclude_patterns: list[str] = []
+    for exc in excludes:
+        exclude_patterns.extend(p.strip() for p in exc.split(",") if p.strip())
+
     # load and filter instances
     instances = config.load_instances()
 
@@ -421,12 +662,53 @@ def family(
         arches=arches_list,
         max_price=budget,
         ebs_min=ebs_min,
+        nvme=True if local_nvme else None,
     )
 
+    # apply exclude patterns
+    if exclude_patterns:
+        filtered = [
+            inst
+            for inst in filtered
+            if not any(core.matching.matches_family_pattern(inst["api_name"], exc) for exc in exclude_patterns)
+        ]
+        click.echo(util.C.dim(f"Excluded: {', '.join(exclude_patterns)}"))
+
     # print results
-    if globs:
-        glob_patterns = core.synthesis.synthesize_globs(filtered, filtered, budget)
-        print_globs(glob_patterns, filtered, sort)
+    if globs or output == "label":
+        glob_patterns = core.synthesis.synthesize_globs(
+            filtered,
+            instances,  # use full universe for constraint checking
+            budget,
+            nvme=True if local_nvme else None,
+        )
+        if output == "label":
+            print_label(
+                glob_patterns,
+                filtered,
+                cpu_req=cpu_req,
+                ram_req=ram_req,
+                arches=arches_list,
+                nvme=local_nvme,
+                selectors=list(selectors) if selectors else None,
+                budget=budget,
+                runner=runner,
+                excludes=exclude_patterns if exclude_patterns else None,
+            )
+        else:
+            print_globs(
+                glob_patterns,
+                filtered,
+                sort,
+                cpu_req=cpu_req,
+                ram_req=ram_req,
+                arches=arches_list,
+                nvme=local_nvme,
+                selectors=list(selectors) if selectors else None,
+                budget=budget,
+                runner=runner,
+                excludes=exclude_patterns if exclude_patterns else None,
+            )
     elif output == "yaml":
         print_yaml(filtered, sort)
     else:
@@ -435,4 +717,4 @@ def family(
             display_configs = {runner: runner_configs[runner]}
         else:
             display_configs = runner_configs
-        print_table(filtered, display_configs, sort)
+        print_table(filtered, display_configs, sort, show_nvme_storage=local_nvme)

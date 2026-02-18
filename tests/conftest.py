@@ -10,22 +10,25 @@ import pytest
 # sample CSV content with representative instances covering various
 # families, architectures, and sizes
 SAMPLE_CSV_CONTENT = """\
-API Name,vCPUs,Instance Memory,On Demand,Linux Spot Minimum cost,EBS Optimized: Baseline Bandwidth
-m7i.large,2 vCPUs,8 GiB,$0.096 hourly,$0.038 hourly,10000 Mbps
-m7i.xlarge,4 vCPUs,16 GiB,$0.192 hourly,$0.077 hourly,10000 Mbps
-m7i.2xlarge,8 vCPUs,32 GiB,$0.384 hourly,$0.154 hourly,10000 Mbps
-m7a.large,2 vCPUs,8 GiB,$0.102 hourly,$0.041 hourly,10000 Mbps
-m7a.xlarge,4 vCPUs,16 GiB,$0.204 hourly,$0.082 hourly,10000 Mbps
-m7g.large,2 vCPUs,8 GiB,$0.082 hourly,$0.033 hourly,10000 Mbps
-m7g.xlarge,4 vCPUs,16 GiB,$0.163 hourly,$0.065 hourly,10000 Mbps
-c7i.large,2 vCPUs,4 GiB,$0.085 hourly,$0.034 hourly,10000 Mbps
-c7i.xlarge,4 vCPUs,8 GiB,$0.170 hourly,$0.068 hourly,10000 Mbps
-r7i.large,2 vCPUs,16 GiB,$0.126 hourly,$0.050 hourly,10000 Mbps
-r7i.xlarge,4 vCPUs,32 GiB,$0.252 hourly,$0.101 hourly,10000 Mbps
-r7a.large,2 vCPUs,16 GiB,$0.134 hourly,$0.054 hourly,10000 Mbps
-t4g.small,2 vCPUs,2 GiB,$0.017 hourly,$0.005 hourly,
-a1.medium,1 vCPUs,2 GiB,$0.025 hourly,$0.008 hourly,
-p5.48xlarge,192 vCPUs,2048 GiB,$98.32 hourly,$29.50 hourly,80000 Mbps
+API Name,vCPUs,Instance Memory,On Demand,Linux Spot Minimum cost,EBS Optimized: Baseline Bandwidth,Instance Storage
+m7i.large,2 vCPUs,8 GiB,$0.096 hourly,$0.038 hourly,10000 Mbps,EBS only
+m7i.xlarge,4 vCPUs,16 GiB,$0.192 hourly,$0.077 hourly,10000 Mbps,EBS only
+m7i.2xlarge,8 vCPUs,32 GiB,$0.384 hourly,$0.154 hourly,10000 Mbps,EBS only
+m7a.large,2 vCPUs,8 GiB,$0.102 hourly,$0.041 hourly,10000 Mbps,EBS only
+m7a.xlarge,4 vCPUs,16 GiB,$0.204 hourly,$0.082 hourly,10000 Mbps,EBS only
+m7g.large,2 vCPUs,8 GiB,$0.082 hourly,$0.033 hourly,10000 Mbps,EBS only
+m7g.xlarge,4 vCPUs,16 GiB,$0.163 hourly,$0.065 hourly,10000 Mbps,EBS only
+m7gd.large,2 vCPUs,8 GiB,$0.095 hourly,$0.038 hourly,10000 Mbps,118 GB NVMe SSD
+m7gd.xlarge,4 vCPUs,16 GiB,$0.190 hourly,$0.076 hourly,10000 Mbps,237 GB NVMe SSD
+c7i.large,2 vCPUs,4 GiB,$0.085 hourly,$0.034 hourly,10000 Mbps,EBS only
+c7i.xlarge,4 vCPUs,8 GiB,$0.170 hourly,$0.068 hourly,10000 Mbps,EBS only
+r7i.large,2 vCPUs,16 GiB,$0.126 hourly,$0.050 hourly,10000 Mbps,EBS only
+r7i.xlarge,4 vCPUs,32 GiB,$0.252 hourly,$0.101 hourly,10000 Mbps,EBS only
+r7a.large,2 vCPUs,16 GiB,$0.134 hourly,$0.054 hourly,10000 Mbps,EBS only
+r7gd.large,2 vCPUs,16 GiB,$0.145 hourly,$0.058 hourly,10000 Mbps,118 GB NVMe SSD
+t4g.small,2 vCPUs,2 GiB,$0.017 hourly,$0.005 hourly,,EBS only
+a1.medium,1 vCPUs,2 GiB,$0.025 hourly,$0.008 hourly,,EBS only
+p5.48xlarge,192 vCPUs,2048 GiB,$98.32 hourly,$29.50 hourly,80000 Mbps,8x3800 GB NVMe SSD
 """
 
 

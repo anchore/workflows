@@ -71,19 +71,21 @@ class TestSynthesizeGlobs:
         # result should be sorted and have no duplicates
         assert result == sorted(set(result))
 
-    def test_filtered_universe_allows_broader_globs(self, sample_instances: list[dict]):
-        """When universe is pre-filtered, globs should be broader since expensive variants are excluded."""
+    def test_budget_checked_against_selected(self, sample_instances: list[dict]):
+        """Budget is checked against selected instances, not the full universe."""
         # select only m7i.large (cheapest m7i instance at $0.096)
         selected = [i for i in sample_instances if i["api_name"] == "m7i.large"]
 
-        # with full universe, budget of $0.10 would force exact name since m7i.xlarge is $0.192
-        result_full_universe = synthesize_globs(selected, sample_instances, budget=0.10)
-        assert "m7i.large" in result_full_universe  # forced to exact name
+        # budget of $0.10 passes because it's checked against selected (max $0.096)
+        # even though universe contains m7i.xlarge at $0.192
+        result = synthesize_globs(selected, sample_instances, budget=0.10)
+        # should produce m7* glob since selected instance is under budget
+        assert "m7*" in result
 
-        # with filtered universe (only m7i.large), budget check passes and allows glob
-        result_filtered_universe = synthesize_globs(selected, selected, budget=0.10)
-        # should allow broader glob since no expensive instances in universe
-        assert "m7*" in result_filtered_universe or "m7i*" in result_filtered_universe
+        # budget of $0.05 fails because even the selected instance exceeds it
+        result_strict = synthesize_globs(selected, sample_instances, budget=0.05)
+        # should fall back to exact name
+        assert "m7i.large" in result_strict
 
     def test_filtered_universe_respects_constraints(self, sample_instances: list[dict]):
         """Globs generated with filtered universe only consider instances in that universe."""
@@ -98,4 +100,40 @@ class TestSynthesizeGlobs:
 
         # with filtered universe, m7* glob max price is only the 2 vCPU variants
         # m7i.large=$0.096, m7a.large=$0.102, m7g.large=$0.082 - all under budget
+        assert "m7*" in result
+
+    def test_nvme_refines_to_d_variants(self, sample_instances: list[dict]):
+        """When nvme=True, globs should only match NVMe instances (d suffix)."""
+        # select only NVMe instances (m7gd, r7gd)
+        selected = [i for i in sample_instances if i.get("nvme", False)]
+
+        # with nvme=True, should produce specific "d" variant globs
+        result = synthesize_globs(selected, sample_instances, nvme=True)
+
+        # m7* would match non-NVMe instances, so it should refine to m7gd*
+        # r7* would match non-NVMe instances, so it should refine to r7gd*
+        assert "m7*" not in result, "m7* matches non-NVMe instances"
+        assert "r7*" not in result, "r7* matches non-NVMe instances"
+        # should have refined patterns or exact names
+        assert any("m7gd" in g for g in result), f"Expected m7gd pattern in {result}"
+        assert any("r7gd" in g for g in result), f"Expected r7gd pattern in {result}"
+
+    def test_nvme_allows_prefix_when_all_nvme(self, sample_instances: list[dict]):
+        """When nvme=True and all instances in prefix have NVMe, use prefix glob."""
+        # select p5 instances (all have NVMe in our fixture)
+        selected = [i for i in sample_instances if i["api_name"].startswith("p5")]
+
+        # p5* should be valid since all p5 instances have NVMe
+        result = synthesize_globs(selected, sample_instances, nvme=True)
+
+        assert "p5*" in result
+
+    def test_nvme_none_allows_broad_globs(self, sample_instances: list[dict]):
+        """When nvme=None, don't filter by NVMe status."""
+        # select all m7 instances (mix of NVMe and non-NVMe)
+        selected = [i for i in sample_instances if i["api_name"].startswith("m7")]
+
+        # without nvme filter, m7* should be valid
+        result = synthesize_globs(selected, sample_instances, nvme=None)
+
         assert "m7*" in result

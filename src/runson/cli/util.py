@@ -78,6 +78,32 @@ def parse_ebs_bandwidth(s: str) -> int | None:
     return int(match.group(1)) if match else None
 
 
+def parse_has_local_nvme(s: str) -> bool:
+    """Parse whether instance has local NVMe storage.
+
+    Returns True if instance has local NVMe SSD storage, False if EBS-only.
+    Examples: "1900 GB NVMe SSD" -> True, "EBS only" -> False
+    """
+    if not s:
+        return False
+    return "nvme" in s.lower() and "ebs only" not in s.lower()
+
+
+def parse_local_storage_gb(s: str) -> int | None:
+    """Parse local storage capacity in GB from Instance Storage field.
+
+    Examples:
+        "1900 GB NVMe SSD" -> 1900
+        "3800 GB (2×1900 GB NVMe SSD)" -> 3800
+        "EBS only" -> None
+    """
+    if not s or "ebs only" in s.lower():
+        return None
+    # match the total GB at the start (before any parenthetical breakdown)
+    match = re.match(r"(\d+)\s*GB", s, re.IGNORECASE)
+    return int(match.group(1)) if match else None
+
+
 def format_duration(seconds: float) -> str:
     """Format duration in human-readable format."""
     if seconds < 60:
