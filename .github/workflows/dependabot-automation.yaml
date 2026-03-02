@@ -38,7 +38,9 @@ jobs:
   automation:
     # Runner definition: workflows/.github/runs-on.yml
     runs-on: runs-on=${{ github.run_id }}/runner=tiny
-    if: github.actor == 'dependabot[bot]'
+    # $ gh api -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version 2022-11-28" /repos/anchore/syft/pulls/4638 | jq .user.login
+    # "dependabot[bot]"
+    if: github.event.pull_request.user.login == 'dependabot[bot]'
     steps:
 
       - name: Dependabot metadata

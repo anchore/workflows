@@ -3,6 +3,8 @@ version: 2
 updates:
 
   - package-ecosystem: "github-actions"
+    cooldown:
+      default-days: 7
     directory: "/"
     schedule:
       interval: "daily"
@@ -11,6 +13,8 @@ updates:
       - "dependencies"
 
   - package-ecosystem: "github-actions"
+    cooldown:
+      default-days: 7
     directory: "/.github/actions/bootstrap"
     schedule:
       interval: "daily"
