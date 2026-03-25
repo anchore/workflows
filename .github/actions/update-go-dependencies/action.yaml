@@ -135,12 +135,14 @@ runs:
             if not output_file:
                 print("No output file provided via $GITHUB_OUTPUT")
             else:
+                import secrets as sec
+                delimiter = sec.token_hex(16)
                 with open(output_file, "a") as output_file:
                     # why the heredoc approach? This is how multiline strings are added as output variables
                     # see https://github.com/github/docs/issues/21529
-                    output_file.write("summary<<EOF\n")
+                    output_file.write(f"summary<<{delimiter}\n")
                     output_file.write(f"{pr_body}\n")
-                    output_file.write("EOF\n")
+                    output_file.write(f"{delimiter}\n")
                     output_file.write(f"draft={draft}\n")
 
             summary_file = os.getenv("GITHUB_STEP_SUMMARY")
