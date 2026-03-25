@@ -81,6 +81,6 @@ jobs:
           INPUTS_ENTRYPOINT: ${{ inputs.entrypoint }}
 
       - name: Perform CodeQL Analysis
-        uses: github/codeql-action/init@89a39a4e59826350b863aa6b6252a07ad50cf83e # v4.32.4
+        uses: github/codeql-action/analyze@89a39a4e59826350b863aa6b6252a07ad50cf83e # v4.32.4
         with:
           category: "/language:go"
