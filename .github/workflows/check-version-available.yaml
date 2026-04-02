@@ -1,0 +1,81 @@
+# Description:
+#   Validates a release version string before tagging. Ensures the version has
+#   a 'v' prefix and that the tag does not already exist on the remote.
+#
+# Permissions:
+#   contents: read  # to check existing tags
+#
+# Required Secrets:
+#   None (uses automatic GITHUB_TOKEN)
+#
+# Usage Example:
+#   jobs:
+#     check-version:
+#       uses: anchore/workflows/.github/workflows/check-version-available.yaml@main
+#       with:
+#         version: ${{ github.event.inputs.version }}
+#
+#     release:
+#       needs: [check-version]
+#       runs-on: ubuntu-24.04
+#       steps:
+#         - run: echo "Releasing..."
+
+name: "Check Version Available"
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        type: string
+        description: 'Version to validate (must have v prefix, e.g., v1.2.3)'
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: "Validate"
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Validate version format
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          if [[ -z "${VERSION}" ]]; then
+            echo "::error::version input cannot be empty"
+            exit 1
+          fi
+
+          if [[ "${VERSION}" != v* ]]; then
+            echo "::error::version '${VERSION}' does not have a 'v' prefix"
+            exit 1
+          fi
+
+          # validate semver format: vMAJOR.MINOR.PATCH with optional prerelease suffix
+          if [[ ! "${VERSION}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.-]+)?$ ]]; then
+            echo "::error::version '${VERSION}' is not valid semver (expected format: vX.Y.Z or vX.Y.Z-prerelease)"
+            exit 1
+          fi
+
+          echo "Version format is valid: ${VERSION}"
+
+      - name: Check if tag already exists
+        env:
+          VERSION: ${{ inputs.version }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # use GitHub API to check if tag exists (more reliable than git ls-remote)
+          HTTP_STATUS=$(gh api "repos/${{ github.repository }}/git/refs/tags/${VERSION}" \
+            -i 2>&1 | head -1 | awk '{print $2}' || echo "000")
+
+          if [[ "${HTTP_STATUS}" == "200" ]]; then
+            echo "::error::tag '${VERSION}' already exists"
+            exit 1
+          elif [[ "${HTTP_STATUS}" != "404" ]]; then
+            echo "::error::failed to check tag existence (HTTP ${HTTP_STATUS})"
+            exit 1
+          fi
+
+          echo "Tag does not exist: ${VERSION}"
