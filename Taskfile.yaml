@@ -2,8 +2,10 @@ version: "3"
 
 
 includes:
-  py:
-    taskfile: ./task.d/python.yaml
+  runson:
+    taskfile: ./task.d/runson.yaml
+  wait-for-check:
+    taskfile: ./task.d/wait-for-check.yaml
 
 vars:
   OWNER: anchore
@@ -87,4 +89,4 @@ tasks:
     desc: Lint github workflows
     deps: [tools]
     cmds:
-      - "{{ .TOOL_DIR}}/wrkflw validate"
+      - "{{ .TOOL_DIR }}/wrkflw validate"

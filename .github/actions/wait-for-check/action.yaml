@@ -1,0 +1,48 @@
+name: 'Wait for Check'
+description: 'Polls for a GitHub check to complete and returns its conclusion'
+
+inputs:
+  token:
+    description: 'GitHub token for API calls'
+    required: true
+  check-name:
+    description: 'Name of the check to wait for'
+    required: true
+  ref:
+    description: 'Git ref (commit SHA) to check'
+    required: true
+  timeout-seconds:
+    description: 'Timeout in seconds (default: 600)'
+    required: false
+    default: '600'
+  interval-seconds:
+    description: 'Polling interval in seconds (default: 30)'
+    required: false
+    default: '30'
+
+outputs:
+  conclusion:
+    description: 'The check conclusion (success, failure, timed_out, etc.)'
+    value: ${{ steps.wait.outputs.conclusion }}
+
+runs:
+  using: composite
+  steps:
+    - name: Wait for check
+      id: wait
+      shell: bash
+      env:
+        INPUT_TOKEN: ${{ inputs.token }}
+        INPUT_CHECK_NAME: ${{ inputs.check-name }}
+        INPUT_REF: ${{ inputs.ref }}
+        INPUT_TIMEOUT: ${{ inputs.timeout-seconds }}
+        INPUT_INTERVAL: ${{ inputs.interval-seconds }}
+        INPUT_REPOSITORY: ${{ github.repository }}
+      run: |
+        python3 "${{ github.action_path }}/wait_for_check.py" \
+          --token "$INPUT_TOKEN" \
+          --repository "$INPUT_REPOSITORY" \
+          --check-name "$INPUT_CHECK_NAME" \
+          --ref "$INPUT_REF" \
+          --timeout-seconds "$INPUT_TIMEOUT" \
+          --interval-seconds "$INPUT_INTERVAL"
