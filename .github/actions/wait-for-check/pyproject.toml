@@ -1,0 +1,25 @@
+[project]
+name = "wait-for-check"
+version = "0.1.0"
+requires-python = ">=3.10"
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "S", "B", "UP"]
+# S = bandit security checks
+# B = bugbear
+# UP = pyupgrade
+
+[tool.ruff.lint.per-file-ignores]
+"test_*.py" = [
+    "S101",  # assert usage is expected in tests
+    "S105",  # hardcoded passwords are test fixtures
+    "S106",  # hardcoded passwords are test fixtures
+]
+
+[tool.pytest.ini_options]
+testpaths = ["."]
+python_files = "test_*.py"

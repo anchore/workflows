@@ -1,0 +1,133 @@
+name: "Wait-for-check Validations"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - ".github/actions/wait-for-check/**"
+      - ".github/workflows/validations-wait-for-check.yaml"
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/actions/wait-for-check/**"
+
+permissions:
+  contents: read
+  checks: read
+
+jobs:
+  Static-Analysis:
+    name: "Static analysis"
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: .github/actions/wait-for-check
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install ruff
+
+      - name: Lint
+        run: ruff check .
+
+      - name: Format check
+        run: ruff format --check .
+
+  Unit-Tests:
+    name: "Unit tests"
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: .github/actions/wait-for-check
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install pytest
+
+      - name: Run tests
+        run: pytest -v
+
+  Functional-Test:
+    name: "Functional test"
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Wait for bogus check (should timeout)
+        id: wait-bogus
+        uses: ./.github/actions/wait-for-check
+        with:
+          token: ${{ github.token }}
+          check-name: "this-check-does-not-exist-abc123"
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          timeout-seconds: 7
+          interval-seconds: 3
+
+      - name: Verify timeout conclusion
+        if: steps.wait-bogus.outputs.conclusion != 'timed_out'
+        run: |
+          echo "::error::Expected 'timed_out' but got: ${{ steps.wait-bogus.outputs.conclusion }}"
+          exit 1
+
+      - name: Wait for Static analysis
+        id: wait-static
+        uses: ./.github/actions/wait-for-check
+        with:
+          token: ${{ github.token }}
+          check-name: "Static analysis"
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          timeout-seconds: 120
+          interval-seconds: 10
+
+      - name: Wait for Unit tests
+        id: wait-tests
+        uses: ./.github/actions/wait-for-check
+        with:
+          token: ${{ github.token }}
+          check-name: "Unit tests"
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          timeout-seconds: 120
+          interval-seconds: 10
+
+      - name: Verify success conclusions
+        env:
+          STATIC_CONCLUSION: ${{ steps.wait-static.outputs.conclusion }}
+          TESTS_CONCLUSION: ${{ steps.wait-tests.outputs.conclusion }}
+        run: |
+          echo "Static analysis conclusion: $STATIC_CONCLUSION"
+          echo "Unit tests conclusion: $TESTS_CONCLUSION"
+
+          if [ "$STATIC_CONCLUSION" != "success" ]; then
+            echo "::error::Static analysis did not succeed: $STATIC_CONCLUSION"
+            exit 1
+          fi
+
+          if [ "$TESTS_CONCLUSION" != "success" ]; then
+            echo "::error::Unit tests did not succeed: $TESTS_CONCLUSION"
+            exit 1
+          fi
+
+          echo "All functional tests passed!"

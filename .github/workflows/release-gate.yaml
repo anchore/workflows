@@ -1,0 +1,147 @@
+# Description:
+#   Waits for multiple GitHub checks to complete in parallel and fails if any
+#   check does not succeed. Uses matrix strategy for concurrent polling.
+#
+# Permissions:
+#   checks: read  # to poll check run status
+#
+# Required Secrets:
+#   None (uses automatic GITHUB_TOKEN)
+#
+# Usage Example:
+#   jobs:
+#     quality-gate:
+#       uses: anchore/workflows/.github/workflows/release-gate.yaml@main
+#       with:
+#         checks: '["Static analysis", "Unit tests", "Integration tests"]'
+
+name: "Release Gate"
+
+on:
+  workflow_call:
+    inputs:
+      checks:
+        type: string
+        description: 'JSON array of check names to wait for'
+        required: true
+      ref:
+        type: string
+        description: 'Git ref to check (defaults to current SHA)'
+        required: false
+        default: ''
+      timeout-seconds:
+        type: number
+        description: 'Timeout per check in seconds'
+        required: false
+        default: 600
+      interval-seconds:
+        type: number
+        description: 'Polling interval in seconds'
+        required: false
+        default: 30
+
+permissions:
+  checks: read
+
+jobs:
+  validate:
+    name: "Validate"
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Validate checks input
+        shell: python3 {0}
+        env:
+          CHECKS_INPUT: ${{ inputs.checks }}
+        run: |
+          import json
+          import os
+          import sys
+
+          checks_input = os.environ.get("CHECKS_INPUT", "")
+
+          # validate not empty
+          if not checks_input or not checks_input.strip():
+              print("::error::The 'checks' input cannot be empty")
+              sys.exit(1)
+
+          # validate valid JSON
+          try:
+              checks = json.loads(checks_input)
+          except json.JSONDecodeError as e:
+              print(f"::error::The 'checks' input is not valid JSON: {e}")
+              sys.exit(1)
+
+          # validate is array
+          if not isinstance(checks, list):
+              print("::error::The 'checks' input must be a JSON array")
+              sys.exit(1)
+
+          # validate non-empty array
+          if len(checks) == 0:
+              print("::error::The 'checks' input array cannot be empty")
+              sys.exit(1)
+
+          # validate all elements are strings
+          for i, check in enumerate(checks):
+              if not isinstance(check, str):
+                  print(f"::error::checks[{i}] must be a string, got: {type(check).__name__}")
+                  sys.exit(1)
+              if not check.strip():
+                  print(f"::error::checks[{i}] cannot be empty or whitespace")
+                  sys.exit(1)
+
+          print(f"Validated {len(checks)} check(s) to wait for:")
+          for check in checks:
+              print(f"  - {check}")
+
+  wait-for-check:
+    name: "Wait: ${{ matrix.check }}"
+    runs-on: ubuntu-24.04
+    needs: [validate]
+    strategy:
+      fail-fast: true
+      matrix:
+        check: ${{ fromJSON(inputs.checks) }}
+    steps:
+      - name: Checkout for action
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          repository: anchore/workflows
+          sparse-checkout: .github/actions/wait-for-check
+          sparse-checkout-cone-mode: false
+
+      - name: Wait for check
+        id: wait
+        uses: ./.github/actions/wait-for-check
+        with:
+          token: ${{ github.token }}
+          check-name: ${{ matrix.check }}
+          ref: ${{ inputs.ref || github.sha }}
+          timeout-seconds: ${{ inputs.timeout-seconds }}
+          interval-seconds: ${{ inputs.interval-seconds }}
+
+      - name: Report check result
+        env:
+          CHECK_NAME: ${{ matrix.check }}
+          CONCLUSION: ${{ steps.wait.outputs.conclusion }}
+        run: |
+          echo "## Check Result" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Check:** $CHECK_NAME" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Conclusion:** $CONCLUSION" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Fail if check did not succeed
+        if: steps.wait.outputs.conclusion != 'success'
+        env:
+          CHECK_NAME: ${{ matrix.check }}
+          CONCLUSION: ${{ steps.wait.outputs.conclusion }}
+        run: |
+          echo "::error::Check '$CHECK_NAME' did not succeed. Conclusion: $CONCLUSION"
+          exit 1
+
+  gate:
+    name: "Gate"
+    runs-on: ubuntu-24.04
+    needs: [wait-for-check]
+    steps:
+      - name: All checks passed
+        run: echo "All required checks passed successfully"

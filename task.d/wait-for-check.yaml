@@ -1,0 +1,46 @@
+version: "3"
+
+vars:
+  ACTION_DIR: .github/actions/wait-for-check
+
+tasks:
+  static-analysis:
+    desc: Run all wait-for-check static analysis tasks
+    cmds:
+      - task: lint
+      - task: format-check
+
+  lint:
+    desc: Run ruff linter on wait-for-check code
+    dir: "{{ .ACTION_DIR }}"
+    cmds:
+      - pip install ruff -q
+      - ruff check .
+
+  lint-fix:
+    desc: Run ruff linter with auto-fix on wait-for-check code
+    dir: "{{ .ACTION_DIR }}"
+    cmds:
+      - pip install ruff -q
+      - ruff check . --fix
+
+  format:
+    desc: Format wait-for-check code with ruff
+    dir: "{{ .ACTION_DIR }}"
+    cmds:
+      - pip install ruff -q
+      - ruff format .
+
+  format-check:
+    desc: Check wait-for-check code formatting
+    dir: "{{ .ACTION_DIR }}"
+    cmds:
+      - pip install ruff -q
+      - ruff format --check .
+
+  test:
+    desc: Run wait-for-check tests with pytest
+    dir: "{{ .ACTION_DIR }}"
+    cmds:
+      - pip install pytest -q
+      - pytest -v
