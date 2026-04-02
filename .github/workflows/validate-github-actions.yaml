@@ -1,33 +1,16 @@
-# Description:
-#   Validates GitHub Actions workflows and configurations using the zizmor
-#   linter. Checks for security issues, best practices, and common mistakes
-#   in workflow definitions.
-#
-# Permissions:
-#   contents: read          # to checkout the repository
-#   security-events: write  # to upload SARIF results to GitHub Security tab
-#
-# Required Secrets:
-#   None
-#
-# Usage Example:
-#   jobs:
-#     validate:
-#       uses: anchore/workflows/.github/workflows/validate-github-actions.yaml@main
-
-
 name: "Validate GitHub Actions"
 
 on:
-  # for checks in this repo (anchore/workflows)
-  workflow_dispatch:
   pull_request:
+    paths:
+      - '.github/workflows/**'
+      - '.github/actions/**'
   push:
     branches:
       - main
-
-  # for use in external repos
-  workflow_call:
+    paths:
+      - '.github/workflows/**'
+      - '.github/actions/**'
 
 permissions:
   contents: read
@@ -35,8 +18,7 @@ permissions:
 jobs:
   zizmor:
     name: "Lint"
-    # Runner definition: workflows/.github/runs-on.yml
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     permissions:
       contents: read
       security-events: write  # for uploading SARIF results
@@ -46,9 +28,8 @@ jobs:
           persist-credentials: false
 
       - name: "Run zizmor"
-        uses: zizmorcore/zizmor-action@0dce2577a4760a2749d8cfb7a84b7d5585ebcb7d # v0.5.0
+        uses: zizmorcore/zizmor-action@71321a20a9ded102f6e9ce5718a2fcec2c4f70d8 # v0.5.2
         with:
-          config-file: .github/zizmor.yml
-          # Disable SARIF upload so the step is a simple pass/fail gate
-          advanced-security: false
+          # there is a pass/fail gate as a repo ruleset (if there is no ruleset configured then the action will pass by default)
+          advanced-security: true
           inputs: .github
