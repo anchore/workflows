@@ -6,6 +6,8 @@ includes:
     taskfile: ./task.d/runson.yaml
   wait-for-check:
     taskfile: ./task.d/wait-for-check.yaml
+  create-tag:
+    taskfile: ./task.d/create-tag-via-deploy-key.yaml
 
 vars:
   OWNER: anchore
