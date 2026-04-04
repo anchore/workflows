@@ -9,16 +9,37 @@ inputs:
 runs:
   using: "composite"
   steps:
+    - name: Check for binny config
+      id: check-binny
+      shell: bash
+      run: |
+        if [ -f ".binny.yaml" ]; then
+          echo "exists=true" >> "$GITHUB_OUTPUT"
+        else
+          echo "exists=false" >> "$GITHUB_OUTPUT"
+        fi
+
     - name: Restore tool cache
+      if: steps.check-binny.outputs.exists == 'true'
       id: tool-cache
       uses: actions/cache@9255dc7a253b0ccc959486e2bca901246202afeb # v5.0.1
       with:
         path: ${{ github.workspace }}/.tool
-        key: ${{ inputs.cache-key-prefix }}-${{ runner.os }}-tool-${{ hashFiles('.binny.yaml') }}
+        key: ${{ inputs.cache-key-prefix }}-${{ runner.arch }}-${{ runner.os }}-tool-${{ hashFiles('.binny.yaml') }}
+        restore-keys: |
+          ${{ inputs.cache-key-prefix }}-${{ runner.arch }}-${{ runner.os }}-tool
 
-    - name: Install project tools
+    - name: Install binny
+      if: steps.check-binny.outputs.exists == 'true'
       shell: bash
       run: |
-        make tools
+        mkdir -p .tool
+        curl -sSfL https://get.anchore.io/binny | sh -s -- -b .tool
+
+    - name: Install project tools
+      if: steps.check-binny.outputs.exists == 'true'
+      shell: bash
+      run: |
+        .tool/binny install
         .tool/binny list
         .tool/binny check
