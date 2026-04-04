@@ -121,13 +121,18 @@ jobs:
           interval-seconds: ${{ inputs.interval-seconds }}
 
       - name: Report check result
+        if: steps.wait.outputs.conclusion != 'success'
         env:
           CHECK_NAME: ${{ matrix.check }}
           CONCLUSION: ${{ steps.wait.outputs.conclusion }}
         run: |
-          echo "## Check Result" >> "$GITHUB_STEP_SUMMARY"
-          echo "- **Check:** $CHECK_NAME" >> "$GITHUB_STEP_SUMMARY"
-          echo "- **Conclusion:** $CONCLUSION" >> "$GITHUB_STEP_SUMMARY"
+          case "$CONCLUSION" in
+            failure)   icon="🔴" ;;
+            cancelled) icon="🟡" ;;
+            skipped)   icon="⚪" ;;
+            *)         icon="⚫" ;;
+          esac
+          echo "${icon} **${CHECK_NAME}** — ${CONCLUSION}" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Fail if check did not succeed
         if: steps.wait.outputs.conclusion != 'success'
