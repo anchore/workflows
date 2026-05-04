@@ -64,11 +64,14 @@ jobs:
       - name: Check if tag already exists
         env:
           VERSION: ${{ inputs.version }}
+          REPO: ${{ github.repository }}
           GH_TOKEN: ${{ github.token }}
         run: |
-          # use GitHub API to check if tag exists (more reliable than git ls-remote)
-          HTTP_STATUS=$(gh api "repos/${{ github.repository }}/git/refs/tags/${VERSION}" \
-            -i 2>&1 | head -1 | awk '{print $2}' || echo "000")
+          # use the singular `git/ref/tags/<name>` endpoint for an exact-match
+          # lookup. The plural `git/refs/tags/<name>` endpoint does prefix
+          # matching and would return 200 for e.g. v0.1.0 if v0.1.0-rc1 exists.
+          HTTP_STATUS=$(gh api "repos/${REPO}/git/ref/tags/${VERSION}" --silent -i 2>/dev/null | head -1 | awk '{print $2}')
+          HTTP_STATUS="${HTTP_STATUS:-000}"
 
           if [[ "${HTTP_STATUS}" == "200" ]]; then
             echo "::error::tag '${VERSION}' already exists"
