@@ -40,8 +40,7 @@ on:
         required: false
         default: 30
 
-permissions:
-  checks: read
+permissions: {}
 
 jobs:
   validate:
@@ -98,6 +97,9 @@ jobs:
     name: "Wait: ${{ matrix.check }}"
     runs-on: ubuntu-24.04
     needs: [validate]
+    permissions:
+      contents: read  # for checkout
+      checks: read    # for polling check run status
     strategy:
       fail-fast: true
       matrix:

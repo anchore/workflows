@@ -14,8 +14,7 @@ on:
     branches:
       - main
 
-permissions:
-  contents: read
+permissions: {}
 
 jobs:
 
@@ -23,6 +22,8 @@ jobs:
     # Note: changing this job name requires making the same update in the .github/workflows/release.yaml pipeline
     name: "Static analysis"
     runs-on: ubuntu-24.04
+    permissions:
+      contents: read  # for checkout
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd #v6.0.2
         with:

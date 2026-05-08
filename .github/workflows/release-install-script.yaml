@@ -29,8 +29,7 @@
 
 name: "Release install script"
 
-permissions:
-  contents: read
+permissions: {}
 
 on:
   # for use in external repos
@@ -76,6 +75,8 @@ jobs:
     name: "Upload"
     # Runner definition: workflows/.github/runs-on.yml
     runs-on: runs-on=${{ github.run_id }}/runner=release
+    permissions:
+      contents: read  # for checkout
     steps:
       # checkout the specific tag to upload the install script for (this also validates the tag exists)
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd #v6.0.2

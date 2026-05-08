@@ -31,13 +31,14 @@ on:
         description: 'Version to validate (must have v prefix, e.g., v1.2.3)'
         required: true
 
-permissions:
-  contents: read
+permissions: {}
 
 jobs:
   validate:
     name: "Validate"
     runs-on: ubuntu-24.04
+    permissions:
+      contents: read  # for checking existing tags via gh api
     steps:
       - name: Validate version format
         env:

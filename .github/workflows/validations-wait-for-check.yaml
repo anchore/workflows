@@ -16,14 +16,14 @@ on:
     paths:
       - ".github/actions/wait-for-check/**"
 
-permissions:
-  contents: read
-  checks: read
+permissions: {}
 
 jobs:
   Static-Analysis:
     name: "Static analysis"
     runs-on: ubuntu-24.04
+    permissions:
+      contents: read  # for checkout
     defaults:
       run:
         working-directory: .github/actions/wait-for-check
@@ -49,6 +49,8 @@ jobs:
   Unit-Tests:
     name: "Unit tests"
     runs-on: ubuntu-24.04
+    permissions:
+      contents: read  # for checkout
     defaults:
       run:
         working-directory: .github/actions/wait-for-check
@@ -71,6 +73,9 @@ jobs:
   Functional-Test:
     name: "Functional test"
     runs-on: ubuntu-24.04
+    permissions:
+      contents: read  # for checkout
+      checks: read    # for wait-for-check action polling check run status
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
