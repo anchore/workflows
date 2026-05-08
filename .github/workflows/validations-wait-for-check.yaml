@@ -94,8 +94,10 @@ jobs:
       - name: Verify timeout conclusion
         if: steps.wait-bogus.outputs.conclusion != 'timed_out'
         run: |
-          echo "::error::Expected 'timed_out' but got: ${{ steps.wait-bogus.outputs.conclusion }}"
+          echo "::error::Expected 'timed_out' but got: ${STEPS_WAIT_BOGUS_OUTPUTS_CONCLUSION}"
           exit 1
+        env:
+          STEPS_WAIT_BOGUS_OUTPUTS_CONCLUSION: ${{ steps.wait-bogus.outputs.conclusion }}
 
       - name: Wait for Static analysis
         id: wait-static

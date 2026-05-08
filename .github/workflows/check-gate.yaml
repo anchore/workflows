@@ -111,6 +111,7 @@ jobs:
           repository: anchore/workflows
           sparse-checkout: .github/actions/wait-for-check
           sparse-checkout-cone-mode: false
+          persist-credentials: false
 
       - name: Wait for check
         id: wait
