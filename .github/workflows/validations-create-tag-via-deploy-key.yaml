@@ -18,13 +18,14 @@ on:
       - ".github/actions/create-tag-via-deploy-key/**"
       - "task.d/create-tag-via-deploy-key.yaml"
 
-permissions:
-  contents: read
+permissions: {}
 
 jobs:
   Static-Analysis:
     name: "Static analysis"
     runs-on: ubuntu-24.04
+    permissions:
+      contents: read  # for checkout
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
@@ -36,7 +37,7 @@ jobs:
           python-version: "3.12"
 
       - name: Install Task
-        uses: arduino/setup-task@v2
+        uses: arduino/setup-task@b91d5d2c96a56797b48ac1e0e89220bf64044611 # v2
         with:
           version: 3.x
 
@@ -46,6 +47,8 @@ jobs:
   Unit-Tests:
     name: "Unit tests"
     runs-on: ubuntu-24.04
+    permissions:
+      contents: read  # for checkout
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
@@ -57,7 +60,7 @@ jobs:
           python-version: "3.12"
 
       - name: Install Task
-        uses: arduino/setup-task@v2
+        uses: arduino/setup-task@b91d5d2c96a56797b48ac1e0e89220bf64044611 # v2
         with:
           version: 3.x
 
@@ -67,6 +70,8 @@ jobs:
   Validation-Test:
     name: "Validation test"
     runs-on: ubuntu-24.04
+    permissions:
+      contents: read  # for checkout
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:

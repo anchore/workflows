@@ -1,3 +1,5 @@
+cooldown: 7d
+
 tools:
   # we want to use a pinned version of binny to manage the toolchain (so binny manages itself!)
   - name: binny
@@ -10,7 +12,7 @@ tools:
   # used to validate workflows
   - name: wrkflw
     version:
-      want: latest
+      want: v0.8.0
     method: github-release
     with:
       repo: bahdotsh/wrkflw
