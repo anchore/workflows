@@ -39,6 +39,10 @@ runs:
     - name: Install project tools
       if: steps.check-binny.outputs.exists == 'true'
       shell: bash
+      env:
+        # required by binny to resolve `version: want: latest` tools and to
+        # enforce cooldown via the GitHub v4 API (works with contents: read).
+        GITHUB_TOKEN: ${{ github.token }}
       run: |
         .tool/binny install
         .tool/binny list

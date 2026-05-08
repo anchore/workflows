@@ -12,7 +12,7 @@ tools:
   # used to validate workflows
   - name: wrkflw
     version:
-      want: latest
+      want: v0.8.0
     method: github-release
     with:
       repo: bahdotsh/wrkflw
