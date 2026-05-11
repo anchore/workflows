@@ -1,0 +1,107 @@
+# Description:
+#   Umbrella CodeQL workflow that fans out to language-specific CodeQL
+#   analyses (Go, GitHub Actions, ...) as a single reusable entry point.
+#   Shim workflows in caller repos should reference this file so that adding,
+#   removing, or reconfiguring analyzers happens centrally here rather than
+#   across every consumer repo.
+#
+#   Defaults run both Go and Actions analyses with the `security-and-quality`
+#   query suite. Override `languages` for non-Go repos (e.g. `languages: actions`).
+#
+# Permissions (caller workflow must grant):
+#   security-events: write  # to upload CodeQL results to GitHub Security tab
+#   contents: read          # to checkout the repository
+#
+# Required Secrets:
+#   None
+#
+# Usage Example (recommended shim, single job, ~15 lines):
+#
+#   name: CodeQL
+#   on:
+#     push:
+#       branches: [main]
+#     pull_request:
+#       branches: [main]
+#     schedule:
+#       - cron: '38 11 * * 3'  # stagger per repo to avoid herd
+#
+#   permissions:
+#     contents: read
+#     security-events: write
+#
+#   jobs:
+#     codeql:
+#       uses: anchore/workflows/.github/workflows/codeql.yaml@main
+#       # All inputs optional. Common overrides:
+#       # with:
+#       #   languages: "actions"           # for non-Go repos
+#       #   go-build-command: "make build" # if `go build ./...` is insufficient
+#       #   config-file: ".github/codeql/codeql-config.yml"
+
+
+name: "CodeQL Analysis"
+
+on:
+  workflow_call:
+    inputs:
+      languages:
+        description: "Comma-separated list of languages to analyze. Supported: go, actions."
+        required: false
+        type: string
+        default: "go,actions"
+      queries:
+        description: "CodeQL query suite applied to every language analysis (default | security-extended | security-and-quality). Ignored per-language when `config-file` is set."
+        required: false
+        type: string
+        default: "security-and-quality"
+      config-file:
+        description: "Optional path to a CodeQL config file shared across all language analyses (e.g. .github/codeql/codeql-config.yml). Per-repo `paths-ignore` and custom queries belong here."
+        required: false
+        type: string
+        default: ""
+      runs-on:
+        description: "Runner to use for all language analyses."
+        required: false
+        type: string
+        default: "ubuntu-latest"
+      # Go-specific overrides (ignored when 'go' is not in `languages`)
+      go-working-directory:
+        description: "Working directory for Go commands."
+        required: false
+        type: string
+        default: "."
+      go-version-file:
+        description: "Path to go.mod (or go.work) used to derive the Go version."
+        required: false
+        type: string
+        default: "go.mod"
+      go-build-command:
+        description: "Command used to build the Go project so CodeQL can index it."
+        required: false
+        type: string
+        default: "go build ./..."
+
+jobs:
+  go:
+    name: "Go"
+    # contains() is safe here because none of the supported language names are
+    # substrings of one another (go, actions).
+    if: contains(inputs.languages, 'go')
+    uses: ./.github/workflows/codeql-go.yaml
+    with:
+      working-directory: ${{ inputs.go-working-directory }}
+      go-version-file: ${{ inputs.go-version-file }}
+      build-command: ${{ inputs.go-build-command }}
+      queries: ${{ inputs.queries }}
+      config-file: ${{ inputs.config-file }}
+      runs-on: ${{ inputs.runs-on }}
+
+  actions:
+    name: "Actions"
+    if: contains(inputs.languages, 'actions')
+    uses: ./.github/workflows/codeql-actions.yaml
+    with:
+      queries: ${{ inputs.queries }}
+      config-file: ${{ inputs.config-file }}
+      runs-on: ${{ inputs.runs-on }}

@@ -1,7 +1,11 @@
 # Description:
-#   Performs CodeQL security analysis on Go codebases. Builds the Go project
-#   and runs CodeQL queries to identify potential security vulnerabilities.
-#   Results are uploaded to the GitHub Security tab.
+#   Performs CodeQL security analysis on a Go codebase. By default the project
+#   is built with `go build ./...` (override via `build-command`) and analyzed
+#   with the `security-and-quality` query suite. Results are uploaded to the
+#   GitHub Security tab.
+#
+#   For most repos prefer the umbrella `codeql.yaml` workflow, which can run
+#   this analysis alongside other CodeQL languages from a single shim call.
 #
 # Permissions:
 #   security-events: write  # to upload CodeQL results to GitHub Security tab
@@ -11,17 +15,17 @@
 #   None
 #
 # Usage Example:
+#   permissions:
+#     contents: read
+#     security-events: write
 #   jobs:
-#     codeql:
+#     codeql-go:
 #       uses: anchore/workflows/.github/workflows/codeql-go.yaml@main
-#       with:
-#         entrypoint: ./cmd/myapp
 
 
 name: "CodeQL Go Analysis"
 
 on:
-  # for use in external repos
   workflow_call:
     inputs:
       working-directory:
@@ -29,21 +33,37 @@ on:
         required: false
         type: string
         default: "."
-      entrypoint:
-        description: "Entrypoint to build"
-        required: true
+      go-version-file:
+        description: "Path to go.mod (or go.work) used to derive the Go version"
+        required: false
         type: string
-      runner-os:
-        description: "Operating system for the runner"
+        default: "go.mod"
+      build-command:
+        description: "Command used to build the Go project so CodeQL can index it"
+        required: false
+        type: string
+        default: "go build ./..."
+      queries:
+        description: "CodeQL query suite (default | security-extended | security-and-quality). Ignored when `config-file` is set."
+        required: false
+        type: string
+        default: "security-and-quality"
+      config-file:
+        description: "Optional path to a CodeQL config file (e.g. .github/codeql/codeql-config.yml). When set, takes precedence over `queries`."
+        required: false
+        type: string
+        default: ""
+      runs-on:
+        description: "Runner to use"
         required: false
         type: string
         default: "ubuntu-latest"
 
 jobs:
-  analyze:
-    name: Go
-    runs-on: ${{ inputs.runner-os }}
-    timeout-minutes: 45
+  run:
+    name: Run
+    runs-on: ${{ inputs.runs-on }}
+    timeout-minutes: 25
     permissions:
       security-events: write
       contents: read
@@ -54,33 +74,60 @@ jobs:
           fetch-depth: 2
           persist-credentials: false
 
+      - name: Detect Go module
+        id: detect
+        working-directory: ${{ inputs.working-directory }}
+        shell: bash
+        env:
+          GO_VERSION_FILE: ${{ inputs.go-version-file }}
+        run: |
+          # gracefully skip when there is nothing for CodeQL to index. This
+          # lets the umbrella workflow default to `languages: "go,actions"`
+          # safely across the fleet without each non-Go repo having to override.
+          if [[ -f "${GO_VERSION_FILE}" || -f go.work ]]; then
+            echo "found=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "found=false" >> "$GITHUB_OUTPUT"
+            echo "::notice title=CodeQL Go::no ${GO_VERSION_FILE} or go.work found in ${PWD}; skipping Go analysis"
+          fi
+
       - name: Setup Go
+        if: steps.detect.outputs.found == 'true'
         uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
         with:
-          go-version-file: "go.mod"
+          go-version-file: ${{ inputs.go-version-file }}
           check-latest: true
 
       - name: Initialize CodeQL
+        if: steps.detect.outputs.found == 'true'
         uses: github/codeql-action/init@e46ed2cbd01164d986452f91f178727624ae40d7 # v4.35.3
         with:
           languages: go
           build-mode: manual
+          # codeql-action ignores `queries` when `config-file` defines its own,
+          # so passing both lets the default suite still apply when no config is provided.
+          queries: ${{ inputs.queries }}
+          config-file: ${{ inputs.config-file }}
 
       - name: Download dependencies
+        if: steps.detect.outputs.found == 'true'
         working-directory: ${{ inputs.working-directory }}
         run: |
           go mod download
           go mod verify
 
       - name: Build
+        if: steps.detect.outputs.found == 'true'
         working-directory: ${{ inputs.working-directory }}
-        run: |
-          mkdir -p snapshot
-          go build -o snapshot/${INPUTS_ENTRYPOINT} ${INPUTS_ENTRYPOINT}
         env:
-          INPUTS_ENTRYPOINT: ${{ inputs.entrypoint }}
+          BUILD_COMMAND: ${{ inputs.build-command }}
+        run: |
+          # eval (not direct expansion) so callers can pass compound commands
+          # like `make build` or `go generate ./... && go build ./...`.
+          eval "${BUILD_COMMAND}"
 
       - name: Perform CodeQL Analysis
+        if: steps.detect.outputs.found == 'true'
         uses: github/codeql-action/analyze@e46ed2cbd01164d986452f91f178727624ae40d7 # v4.35.3
         with:
           category: "/language:go"
