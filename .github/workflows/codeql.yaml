@@ -6,7 +6,9 @@
 #   across every consumer repo.
 #
 #   Defaults run both Go and Actions analyses with the `security-and-quality`
-#   query suite. Override `languages` for non-Go repos (e.g. `languages: actions`).
+#   query suite. Override `languages` for non-Go repos (e.g. `languages: actions`)
+#   or to opt in to additional analyzers (e.g. `languages: "go,actions,python"`).
+#   Supported: go, actions, python, javascript (covers TypeScript).
 #
 # Permissions (caller workflow must grant):
 #   security-events: write  # to upload CodeQL results to GitHub Security tab
@@ -46,7 +48,7 @@ on:
   workflow_call:
     inputs:
       languages:
-        description: "Comma-separated list of languages to analyze. Supported: go, actions."
+        description: "Comma-separated list of languages to analyze. Supported: go, actions, python, javascript."
         required: false
         type: string
         default: "go,actions"
@@ -86,7 +88,8 @@ jobs:
   go:
     name: "Go"
     # contains() is safe here because none of the supported language names are
-    # substrings of one another (go, actions).
+    # substrings of one another (go, actions, python, javascript). Revisit if
+    # adding a language whose name overlaps (e.g. "java" would match "javascript").
     if: contains(inputs.languages, 'go')
     uses: ./.github/workflows/codeql-go.yaml
     with:
@@ -101,6 +104,26 @@ jobs:
     name: "Actions"
     if: contains(inputs.languages, 'actions')
     uses: ./.github/workflows/codeql-actions.yaml
+    with:
+      queries: ${{ inputs.queries }}
+      config-file: ${{ inputs.config-file }}
+      runs-on: ${{ inputs.runs-on }}
+
+  python:
+    name: "Python"
+    if: contains(inputs.languages, 'python')
+    uses: ./.github/workflows/codeql-python.yaml
+    with:
+      queries: ${{ inputs.queries }}
+      config-file: ${{ inputs.config-file }}
+      runs-on: ${{ inputs.runs-on }}
+
+  javascript:
+    name: "JavaScript"
+    # matches both "javascript" and the canonical "javascript-typescript"
+    # extractor id; the per-language workflow uses the latter internally.
+    if: contains(inputs.languages, 'javascript')
+    uses: ./.github/workflows/codeql-javascript.yaml
     with:
       queries: ${{ inputs.queries }}
       config-file: ${{ inputs.config-file }}

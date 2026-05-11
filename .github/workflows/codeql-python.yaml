@@ -1,0 +1,73 @@
+# Description:
+#   Performs CodeQL security analysis on a Python codebase. Uses `build-mode: none`
+#   so no interpreter or dependency install is required; CodeQL extracts directly
+#   from source. Defaults to the `security-and-quality` query suite. Results are
+#   uploaded to the GitHub Security tab.
+#
+#   For most repos prefer the umbrella `codeql.yaml` workflow, which can run
+#   this analysis alongside other CodeQL languages from a single shim call.
+#
+# Permissions:
+#   security-events: write  # to upload CodeQL results to GitHub Security tab
+#   contents: read          # to checkout the repository
+#
+# Required Secrets:
+#   None
+#
+# Usage Example:
+#   permissions:
+#     contents: read
+#     security-events: write
+#   jobs:
+#     codeql-python:
+#       uses: anchore/workflows/.github/workflows/codeql-python.yaml@main
+
+
+name: "CodeQL Python Analysis"
+
+on:
+  workflow_call:
+    inputs:
+      queries:
+        description: "CodeQL query suite (default | security-extended | security-and-quality). Ignored when `config-file` is set."
+        required: false
+        type: string
+        default: "security-and-quality"
+      config-file:
+        description: "Optional path to a CodeQL config file. When set, takes precedence over `queries`."
+        required: false
+        type: string
+        default: ""
+      runs-on:
+        description: "Runner to use"
+        required: false
+        type: string
+        default: "ubuntu-latest"
+
+jobs:
+  run:
+    name: Run
+    runs-on: ${{ inputs.runs-on }}
+    timeout-minutes: 25
+    permissions:
+      security-events: write
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@e46ed2cbd01164d986452f91f178727624ae40d7 # v4.35.3
+        with:
+          languages: python
+          build-mode: none
+          queries: ${{ inputs.queries }}
+          config-file: ${{ inputs.config-file }}
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@e46ed2cbd01164d986452f91f178727624ae40d7 # v4.35.3
+        with:
+          category: "/language:python"
