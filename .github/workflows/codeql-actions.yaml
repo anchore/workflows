@@ -1,0 +1,74 @@
+# Description:
+#   Performs CodeQL security analysis on GitHub Actions workflow files
+#   (.github/workflows/*.yml). Catches unsafe patterns like untrusted input
+#   in `run:` blocks, overly permissive tokens, and other workflow-level
+#   vulnerabilities. Complements (does not replace) zizmor; the two analyzers
+#   cover overlapping but distinct issue classes.
+#
+#   For most repos prefer the umbrella `codeql.yaml` workflow, which can run
+#   this analysis alongside other CodeQL languages from a single shim call.
+#
+# Permissions:
+#   security-events: write  # to upload CodeQL results to GitHub Security tab
+#   contents: read          # to checkout the repository
+#
+# Required Secrets:
+#   None
+#
+# Usage Example:
+#   permissions:
+#     contents: read
+#     security-events: write
+#   jobs:
+#     codeql-actions:
+#       uses: anchore/workflows/.github/workflows/codeql-actions.yaml@main
+
+
+name: "CodeQL Actions Analysis"
+
+on:
+  workflow_call:
+    inputs:
+      queries:
+        description: "CodeQL query suite (default | security-extended | security-and-quality). Ignored when `config-file` is set."
+        required: false
+        type: string
+        default: "security-and-quality"
+      config-file:
+        description: "Optional path to a CodeQL config file. When set, takes precedence over `queries`."
+        required: false
+        type: string
+        default: ""
+      runs-on:
+        description: "Runner to use"
+        required: false
+        type: string
+        default: "ubuntu-latest"
+
+jobs:
+  run:
+    name: Run
+    runs-on: ${{ inputs.runs-on }}
+    timeout-minutes: 15
+    permissions:
+      security-events: write
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@c10b8064de6f491fea524254123dbe5e09572f13 # v4.35.1
+        with:
+          languages: actions
+          build-mode: none
+          queries: ${{ inputs.queries }}
+          config-file: ${{ inputs.config-file }}
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@c10b8064de6f491fea524254123dbe5e09572f13 # v4.35.1
+        with:
+          category: "/language:actions"
