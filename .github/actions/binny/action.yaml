@@ -22,7 +22,7 @@ runs:
     - name: Restore tool cache
       if: steps.check-binny.outputs.exists == 'true'
       id: tool-cache
-      uses: actions/cache@9255dc7a253b0ccc959486e2bca901246202afeb # v5.0.1
+      uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
       with:
         path: ${{ github.workspace }}/.tool
         key: ${{ inputs.cache-key-prefix }}-${{ runner.arch }}-${{ runner.os }}-tool-${{ hashFiles('.binny.yaml') }}
