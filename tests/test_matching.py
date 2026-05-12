@@ -6,6 +6,7 @@ import pytest
 
 from runson.cli.config import Requirement
 from runson.core.matching import (
+    _is_spot_enabled,
     filter_instances,
     find_matching_runners,
     get_instance_price,
@@ -238,3 +239,106 @@ class TestGetInstancePrice:
     def test_returns_none_for_unknown(self, sample_instances: list[dict]):
         price = get_instance_price("unknown.instance", sample_instances)
         assert price is None
+
+
+class TestIsSpotEnabled:
+    """Tests for _is_spot_enabled function."""
+
+    @pytest.mark.parametrize(
+        "spot_value,expected",
+        [
+            # explicitly disabled
+            (False, False),
+            ("false", False),
+            ("False", False),
+            ("FALSE", False),
+            # explicitly enabled
+            (True, True),
+            ("true", True),
+            # strategy strings mean enabled
+            ("lco", True),
+            ("price-capacity-optimized", True),
+            ("capacity-optimized", True),
+            # None defaults to enabled
+            (None, True),
+        ],
+    )
+    def test_spot_enabled_values(self, spot_value, expected: bool):
+        assert _is_spot_enabled(spot_value) == expected
+
+
+class TestGetRunnerPriceRangeSpot:
+    """Tests for spot pricing in get_runner_price_range."""
+
+    def test_spot_enabled_uses_spot_for_min_price(self, sample_instances: list[dict]):
+        # m7i.large: on-demand $0.096, spot $0.038
+        runner_config = {
+            "families": ["m7i.large"],
+            "cpu": None,
+            "ram": None,
+            "spot": True,
+        }
+
+        min_price, max_price, min_name, max_name = get_runner_price_range(runner_config, sample_instances)
+
+        # min should be spot price, max should be on-demand (fallback)
+        assert min_price == 0.038  # spot price
+        assert max_price == 0.096  # on-demand price
+
+    def test_spot_disabled_uses_on_demand_for_both(self, sample_instances: list[dict]):
+        runner_config = {
+            "families": ["m7i.large"],
+            "cpu": None,
+            "ram": None,
+            "spot": False,
+        }
+
+        min_price, max_price, min_name, max_name = get_runner_price_range(runner_config, sample_instances)
+
+        # both should be on-demand
+        assert min_price == 0.096
+        assert max_price == 0.096
+
+    def test_spot_strategy_string_enables_spot(self, sample_instances: list[dict]):
+        runner_config = {
+            "families": ["m7i.large"],
+            "cpu": None,
+            "ram": None,
+            "spot": "price-capacity-optimized",
+        }
+
+        min_price, max_price, _, _ = get_runner_price_range(runner_config, sample_instances)
+
+        assert min_price == 0.038  # spot price
+        assert max_price == 0.096  # on-demand fallback
+
+    def test_spot_default_enabled_when_not_specified(self, sample_instances: list[dict]):
+        # no spot key in config = defaults to enabled
+        runner_config = {
+            "families": ["m7i.large"],
+            "cpu": None,
+            "ram": None,
+        }
+
+        min_price, max_price, _, _ = get_runner_price_range(runner_config, sample_instances)
+
+        assert min_price == 0.038  # spot price
+        assert max_price == 0.096  # on-demand fallback
+
+    def test_spot_range_with_multiple_instances(self, sample_instances: list[dict]):
+        # m7i family: large, xlarge, 2xlarge
+        runner_config = {
+            "families": ["m7i*"],
+            "cpu": None,
+            "ram": None,
+            "spot": True,
+        }
+
+        min_price, max_price, min_name, max_name = get_runner_price_range(runner_config, sample_instances)
+
+        # min: spot price of cheapest (m7i.large spot = $0.038)
+        # max: on-demand of most expensive (m7i.2xlarge on-demand = $0.384)
+        assert min_price == 0.038
+        assert max_price == 0.384
+        assert min_name == "m7i.large"
+        assert max_name == "m7i.2xlarge"
