@@ -22,7 +22,6 @@
 #     codeql-go:
 #       uses: anchore/workflows/.github/workflows/codeql-go.yaml@main
 
-
 name: "CodeQL Go Analysis"
 
 on:
@@ -58,6 +57,8 @@ on:
         required: false
         type: string
         default: "ubuntu-latest"
+
+permissions: {}
 
 jobs:
   run:

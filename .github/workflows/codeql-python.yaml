@@ -22,7 +22,6 @@
 #     codeql-python:
 #       uses: anchore/workflows/.github/workflows/codeql-python.yaml@main
 
-
 name: "CodeQL Python Analysis"
 
 on:
@@ -43,6 +42,8 @@ on:
         required: false
         type: string
         default: "ubuntu-latest"
+
+permissions: {}
 
 jobs:
   run:

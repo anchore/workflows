@@ -24,7 +24,6 @@
 #     codeql-javascript:
 #       uses: anchore/workflows/.github/workflows/codeql-javascript.yaml@main
 
-
 name: "CodeQL JavaScript Analysis"
 
 on:
@@ -45,6 +44,8 @@ on:
         required: false
         type: string
         default: "ubuntu-latest"
+
+permissions: {}
 
 jobs:
   run:

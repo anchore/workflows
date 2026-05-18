@@ -41,7 +41,6 @@
 #       #   go-build-command: "make build" # if `go build ./...` is insufficient
 #       #   config-file: ".github/codeql/codeql-config.yml"
 
-
 name: "CodeQL Analysis"
 
 on:
@@ -83,6 +82,8 @@ on:
         required: false
         type: string
         default: "go build ./..."
+
+permissions: {}
 
 jobs:
   go:
