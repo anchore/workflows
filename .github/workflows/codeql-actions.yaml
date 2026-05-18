@@ -23,7 +23,6 @@
 #     codeql-actions:
 #       uses: anchore/workflows/.github/workflows/codeql-actions.yaml@main
 
-
 name: "CodeQL Actions Analysis"
 
 on:
@@ -44,6 +43,8 @@ on:
         required: false
         type: string
         default: "ubuntu-latest"
+
+permissions: {}
 
 jobs:
   run:

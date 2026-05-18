@@ -1,26 +1,64 @@
 name: "Bootstrap"
-description: "Bootstrap complete development environment (tools + Python)"
+description: "Bootstrap complete development environment (go-make + tools + Python)"
+
+# This action is a thin wrapper around anchore/go-make/.github/actions/setup which
+# handles checkout, setup-go, restore-only build/mod cache, and the binny tool cache.
+# Python tooling (uv + setup-python + uv sync) is inlined here with the same
+# restore-only cache pattern so a single action sets up everything this repo needs.
 
 inputs:
+  go-version:
+    description: "Go version to install (passed to go-make/setup)"
+    required: false
+    default: "1.26.2"
   python-version:
-    description: "Python version to use"
+    description: "Python version to install"
     required: false
     default: "3.13"
+  uv-version:
+    description: "UV version to install"
+    required: false
+    default: "0.7.x"
   cache-key-prefix:
-    description: "Cache key prefix for tool caching"
+    description: "Prefix all cache keys with this value"
     required: false
     default: "181053ac82"
+  cache-enabled:
+    description: "Enable build/mod and tool caching"
+    required: false
+    default: "true"
 
 runs:
   using: "composite"
   steps:
-    - name: Bootstrap tools
-      uses: ./.github/actions/binny
+    # setup go, go-make, binny, and restore-only build/mod + tool caches
+    - name: Setup go + go-make tooling
+      uses: anchore/go-make/.github/actions/setup@88c36505984649108439f13fb35dcaea4ce61d94 # v0.4.0
       with:
+        go-version: ${{ inputs.go-version }}
+        cache-dependency-path: .make/go.sum
         cache-key-prefix: ${{ inputs.cache-key-prefix }}
+        cache-enabled: ${{ inputs.cache-enabled }}
 
-    - name: Bootstrap Python
-      uses: ./.github/actions/python
+    - name: Install binny-managed tools
+      shell: bash
+      run: make binny:install
+
+    # restore-only caching pattern: PRs (and pushes to fork default branches) read existing
+    # caches but never write back. Only pushes to the upstream repo's default branch refresh
+    # them. This keeps untrusted runs from polluting or evicting trusted cache entries.
+    - name: Install uv
+      uses: astral-sh/setup-uv@681c641aba71e4a1c380be3ab5e12ad51f415867 # v7.1.6
+      with:
+        version: ${{ inputs.uv-version }}
+        enable-cache: true
+        save-cache: ${{ github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.event.repository.fork == false }}
+
+    - name: Set up Python
+      uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
       with:
         python-version: ${{ inputs.python-version }}
-        cache-key-prefix: ${{ inputs.cache-key-prefix }}
+
+    - name: Install project dependencies
+      shell: bash
+      run: uv sync --extra dev

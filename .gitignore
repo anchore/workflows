@@ -1,19 +1,77 @@
-.idea
-.vscode
+# tool and bin directories
+.tmp/
+bin/
+/bin
+/.bin
+/build
+/dist
+/snapshot
+/.tool
+/.task
+/generate
+/specs
+mise.toml
+.make/.make
+.conductor
+.make/.make
+.env
+
+# changelog generation
+CHANGELOG.md
+VERSION
+
+# IDE configuration
+.vscode/
+.idea/
+.server/
+.history/
 .ropeproject
 
-# tooling
-.tool
-specs
+# test related
+*.fingerprint
+/test/results
+coverage.txt
+*.log
+**/test-fixtures/test-observations.json
+**/testdata/test-observations.json
+
+# probable archives
+.images
+*.tar
+*.jar
+*.war
+*.ear
+*.jpi
+*.hpi
+*.zip
+*.iml
+
+# Binaries for programs and plugins
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binary, build with `go test -c`
+*.test
+
+# Output of the go coverage tool, specifically when used with LiteIDE
+*.out
+
+# macOS Finder metadata
+.DS_STORE
+
+*.profile
+
+# attestation
+cosign.key
+cosign.pub
+
+# Byte-compiled object files for python
+__pycache__/
+*.py[cod]
+*$py.class
 
 # python
 .venv
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
-*.pdb
-*.egg-info/
-.eggs/
-dist/
-build/

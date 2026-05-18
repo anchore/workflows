@@ -1,13 +1,16 @@
 # Bootstrap
 
-A GitHub Action that sets up a complete development environment by combining the `binny` and `python` actions.
+A GitHub Action that sets up a complete development environment for this repo: Go + go-make, binny-managed CLI tools, and a Python environment via uv.
 
 ## Why use this?
 
-For projects that need both binny-managed tools and a Python environment, this action provides a single step to set up everything. It's a convenience wrapper that:
+This action is a thin wrapper around [`anchore/go-make/.github/actions/setup`](https://github.com/anchore/go-make/blob/main/.github/actions/setup/action.yaml) that adds the Python setup steps this repo also needs. It provides a single step to:
 
-- Installs all binny-managed tools (with caching)
-- Sets up Python with uv and project dependencies
+- Set up Go (with restore-only build/mod cache)
+- Restore the binny tool cache and install binny-managed tools (`make binny:install`)
+- Set up uv + Python and install project dependencies (`uv sync --extra dev`)
+
+All cache writes are gated to pushes on the upstream repo's default branch only, so PRs and fork pushes are restore-only.
 
 ## Usage
 
@@ -19,8 +22,11 @@ For projects that need both binny-managed tools and a Python environment, this a
 
 | Input | Required | Default | Description |
 |-------|----------|---------|-------------|
+| `go-version` | No | `1.26.2` | Go version to install |
 | `python-version` | No | `3.13` | Python version to install |
+| `uv-version` | No | `0.7.x` | uv version to install |
 | `cache-key-prefix` | No | `181053ac82` | Prefix for cache keys (change to invalidate cache) |
+| `cache-enabled` | No | `true` | Enable build/mod and tool caching |
 
 ## Outputs
 
@@ -41,18 +47,7 @@ jobs:
 
       - name: Set up environment
         uses: ./.github/actions/bootstrap
-        with:
-          python-version: "3.12"
 
-      - name: Run tests
-        run: pytest
+      - name: Run static analysis
+        run: make static-analysis
 ```
-
-## What It Does
-
-This action runs two sub-actions in sequence:
-
-1. **binny** - Installs CLI tools from `.binny.yaml`
-2. **python** - Sets up Python with uv and installs dependencies from `pyproject.toml`
-
-If you only need one of these, use the individual actions instead.
