@@ -29,8 +29,8 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Bootstrap tools
-        uses: ./.github/actions/binny
+      - name: Bootstrap environment
+        uses: ./.github/actions/bootstrap
 
       - name: Run static analysis
         run: make static-analysis
