@@ -1,0 +1,51 @@
+name: 'Create Tag via Deploy Key'
+description: 'Creates and pushes a git tag using a deploy key for authentication'
+
+inputs:
+  tag:
+    description: 'The tag to create (e.g., v1.2.3)'
+    required: true
+  deploy-key:
+    description: 'SSH private key with write access to the repository'
+    required: true
+  tag-message:
+    description: 'Annotated tag message (defaults to "Release <tag>")'
+    required: false
+    default: ''
+  git-user-name:
+    description: 'Git user.name for the tag commit'
+    required: false
+    default: 'github-actions[bot]'
+  git-user-email:
+    description: 'Git user.email for the tag commit'
+    required: false
+    default: 'github-actions[bot]@users.noreply.github.com'
+
+outputs:
+  tag:
+    description: 'The tag that was created'
+    value: ${{ inputs.tag }}
+  sha:
+    description: 'The commit SHA that was tagged'
+    value: ${{ steps.create-tag.outputs.sha }}
+
+runs:
+  using: composite
+  steps:
+    - name: Create and push tag
+      id: create-tag
+      shell: bash
+      env:
+        INPUT_TAG: ${{ inputs.tag }}
+        INPUT_DEPLOY_KEY: ${{ inputs.deploy-key }}
+        INPUT_TAG_MESSAGE: ${{ inputs.tag-message }}
+        INPUT_GIT_USER_NAME: ${{ inputs.git-user-name }}
+        INPUT_GIT_USER_EMAIL: ${{ inputs.git-user-email }}
+        INPUT_REPOSITORY: ${{ github.repository }}
+      run: |
+        python3 "${{ github.action_path }}/create_tag.py" \
+          --tag "$INPUT_TAG" \
+          --tag-message "$INPUT_TAG_MESSAGE" \
+          --git-user-name "$INPUT_GIT_USER_NAME" \
+          --git-user-email "$INPUT_GIT_USER_EMAIL" \
+          --repository "$INPUT_REPOSITORY"
