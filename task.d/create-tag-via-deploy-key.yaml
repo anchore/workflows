@@ -1,0 +1,46 @@
+version: "3"
+
+vars:
+  ACTION_DIR: .github/actions/create-tag-via-deploy-key
+
+tasks:
+  static-analysis:
+    desc: Run all create-tag-via-deploy-key static analysis tasks
+    cmds:
+      - task: lint
+      - task: format-check
+
+  lint:
+    desc: Run ruff linter on create-tag-via-deploy-key code
+    dir: "{{ .ACTION_DIR }}"
+    cmds:
+      - pip install ruff -q
+      - ruff check .
+
+  lint-fix:
+    desc: Run ruff linter with auto-fix on create-tag-via-deploy-key code
+    dir: "{{ .ACTION_DIR }}"
+    cmds:
+      - pip install ruff -q
+      - ruff check . --fix
+
+  format:
+    desc: Format create-tag-via-deploy-key code with ruff
+    dir: "{{ .ACTION_DIR }}"
+    cmds:
+      - pip install ruff -q
+      - ruff format .
+
+  format-check:
+    desc: Check create-tag-via-deploy-key code formatting
+    dir: "{{ .ACTION_DIR }}"
+    cmds:
+      - pip install ruff -q
+      - ruff format --check .
+
+  test:
+    desc: Run create-tag-via-deploy-key tests with pytest
+    dir: "{{ .ACTION_DIR }}"
+    cmds:
+      - pip install pytest -q
+      - pytest -v
