@@ -25,6 +25,7 @@ jobs:
   check-gate:
     permissions:
       checks: read # required for getting the status of specific check names
+      contents: read # required for getting wait-for-check code
     uses: ./.github/workflows/check-gate.yaml
     with:
       # these are checks that should be run on pull-request and merges to main.
