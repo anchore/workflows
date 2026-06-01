@@ -106,31 +106,7 @@ class TestValidateConfig:
                 interval_seconds=-1,
             )
 
-    def test_invalid_not_found_timeout(self):
-        with pytest.raises(ValidationError, match="not_found_timeout_seconds must be positive"):
-            validate_config(
-                token="token",
-                repository="owner/repo",
-                check_name="test",
-                ref="abc123",
-                timeout_seconds=600,
-                interval_seconds=30,
-                not_found_timeout_seconds=0,
-            )
-
-    def test_not_found_timeout_not_less_than_timeout(self):
-        with pytest.raises(ValidationError, match="not_found_timeout_seconds.*must be less than"):
-            validate_config(
-                token="token",
-                repository="owner/repo",
-                check_name="test",
-                ref="abc123",
-                timeout_seconds=60,
-                interval_seconds=30,
-                not_found_timeout_seconds=60,
-            )
-
-    def test_not_found_timeout_and_verbose_defaults(self):
+    def test_verbose_default(self):
         config = validate_config(
             token="token",
             repository="owner/repo",
@@ -139,7 +115,6 @@ class TestValidateConfig:
             timeout_seconds=600,
             interval_seconds=30,
         )
-        assert config.not_found_timeout_seconds == 90
         assert config.verbose is False
 
     def test_interval_greater_than_timeout(self):
@@ -356,8 +331,6 @@ class TestParseArgs:
                 "300",
                 "--interval-seconds",
                 "15",
-                "--not-found-timeout-seconds",
-                "90",
                 "--verbose",
             ]
         )
@@ -367,7 +340,6 @@ class TestParseArgs:
         assert args.ref == "abc123"
         assert args.timeout_seconds == 300
         assert args.interval_seconds == 15
-        assert args.not_found_timeout_seconds == 90
         assert args.verbose is True
 
     def test_defaults(self):
@@ -385,7 +357,6 @@ class TestParseArgs:
         )
         assert args.timeout_seconds == 600
         assert args.interval_seconds == 30
-        assert args.not_found_timeout_seconds == 90
         assert args.verbose is False
 
     def test_missing_required_arg(self):
@@ -512,7 +483,6 @@ def _diag_config(**overrides):
         "ref": "abc123",
         "timeout_seconds": 10,
         "interval_seconds": 1,
-        "not_found_timeout_seconds": 3,
         "verbose": False,
     }
     base.update(overrides)
@@ -542,7 +512,7 @@ class TestWaitForCheckDiagnostics:
         result = wait_for_check(_diag_config())
 
         out = capsys.readouterr().out
-        assert result == "not_found"
+        assert result == "timed_out"
         assert "every GitHub API request failed" in out
         assert "does not match" not in out
 
@@ -557,7 +527,7 @@ class TestWaitForCheckDiagnostics:
         result = wait_for_check(_diag_config())
 
         out = capsys.readouterr().out
-        assert result == "not_found"
+        assert result == "timed_out"
         assert "does not match" in out
         assert "Other" in out
 
@@ -571,7 +541,7 @@ class TestWaitForCheckDiagnostics:
         assert wait_for_check(_diag_config()) == "success"
 
     def test_seen_but_never_completes_times_out(self, monkeypatch, capsys):
-        """A check that is found but stays in_progress past the timeout is timed_out, not not_found."""
+        """A check found but stuck in_progress times out with the seen (not the never-seen) diagnostics."""
         _freeze_clock(monkeypatch)
         monkeypatch.setattr(
             "wait_for_check.fetch_check_runs",
@@ -667,7 +637,7 @@ class TestWaitForCheckRateLimits:
 
         monkeypatch.setattr("wait_for_check.fetch_check_runs", flaky)
 
-        result = wait_for_check(_diag_config(timeout_seconds=600, not_found_timeout_seconds=120))
+        result = wait_for_check(_diag_config(timeout_seconds=600))
 
         assert result == "success"
         assert sleeps == [45]
@@ -689,7 +659,7 @@ class TestWaitForCheckRateLimits:
 
         monkeypatch.setattr("wait_for_check.fetch_check_runs", flaky)
 
-        result = wait_for_check(_diag_config(timeout_seconds=600, not_found_timeout_seconds=120))
+        result = wait_for_check(_diag_config(timeout_seconds=600))
 
         assert result == "success"
         assert sleeps == [30]
@@ -721,7 +691,7 @@ class TestWaitForCheckRateLimits:
 
         monkeypatch.setattr("wait_for_check.fetch_check_runs", always_rate_limited)
 
-        result = wait_for_check(_diag_config(timeout_seconds=10, not_found_timeout_seconds=9))
+        result = wait_for_check(_diag_config(timeout_seconds=10))
 
         assert result == "timed_out"
         # never slept longer than the remaining budget

@@ -28,7 +28,6 @@ GitHub Actions workflows sometimes need to wait for other checks to complete bef
 | `ref` | Yes | - | Git ref (commit SHA) to check |
 | `timeout-seconds` | No | `600` | Maximum time to wait for a check to complete before timing out |
 | `interval-seconds` | No | `30` | How often to poll the GitHub API |
-| `not-found-timeout-seconds` | No | `90` | Time to wait for a check with the given name to appear at all (any status) before giving up early. Distinct from `timeout-seconds`, which bounds how long to wait for an already-seen check to complete |
 | `verbose` | No | `false` | Log the check-run names seen on each poll |
 
 ## Outputs
@@ -81,8 +80,7 @@ jobs:
 ## Behavior
 
 - Polls the GitHub API at the specified interval until the check completes or times out
-- Returns `timed_out` as the conclusion if the timeout is reached
-- Returns `not_found` if the named check never appears within `not-found-timeout-seconds` (typically a name mismatch or a check that never started)
+- Returns `timed_out` as the conclusion if the timeout is reached (if the named check never appeared, the failure message calls out the likely name mismatch and lists the checks that were observed)
 - Handles API errors gracefully with retries
 - Fails fast with conclusion `auth_error` on an HTTP 401 (invalid/missing token) rather than polling to the timeout
 - Honors GitHub rate limits: on a 403/429 carrying `Retry-After` or `x-ratelimit-reset`, it waits until the window resets (capped to the remaining timeout) instead of polling on the fixed interval
