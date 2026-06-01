@@ -34,10 +34,6 @@ class Config(NamedTuple):
     ref: str
     timeout_seconds: int
     interval_seconds: int
-    # how long to wait for a check with the given name to appear at all (any
-    # status) before giving up early. distinct from timeout_seconds, which
-    # bounds how long we wait for an already-seen check to complete.
-    not_found_timeout_seconds: int = 90
     verbose: bool = False
 
 
@@ -52,7 +48,6 @@ def validate_config(
     ref: str | None,
     timeout_seconds: int,
     interval_seconds: int,
-    not_found_timeout_seconds: int = 90,
     verbose: bool = False,
 ) -> Config:
     """Validate all inputs and return a Config object.
@@ -88,15 +83,6 @@ def validate_config(
     if interval_seconds >= timeout_seconds:
         errors.append(f"interval_seconds ({interval_seconds}) must be less than timeout_seconds ({timeout_seconds})")
 
-    if not_found_timeout_seconds <= 0:
-        errors.append(f"not_found_timeout_seconds must be positive, got: {not_found_timeout_seconds}")
-    elif not_found_timeout_seconds >= timeout_seconds:
-        # otherwise the early give-up never fires - the full timeout is reached first
-        errors.append(
-            f"not_found_timeout_seconds ({not_found_timeout_seconds}) must be less than "
-            f"timeout_seconds ({timeout_seconds})"
-        )
-
     if errors:
         raise ValidationError("; ".join(errors))
 
@@ -107,7 +93,6 @@ def validate_config(
         ref=ref,  # type: ignore[arg-type]
         timeout_seconds=timeout_seconds,
         interval_seconds=interval_seconds,
-        not_found_timeout_seconds=not_found_timeout_seconds,
         verbose=verbose,
     )
 
@@ -258,7 +243,7 @@ def wait_for_check(config: Config) -> str:
     """Poll for a check to complete.
 
     Returns:
-        The check conclusion (e.g., "success", "failure", "timed_out", "not_found",
+        The check conclusion (e.g., "success", "failure", "timed_out",
         "auth_error").
     """
     start = time.time()
@@ -269,10 +254,7 @@ def wait_for_check(config: Config) -> str:
     last_seen_names: list[str] = []
 
     print(f"Waiting for check '{config.check_name}' on ref {config.ref}")
-    print(
-        f"Timeout: {config.timeout_seconds}s, not-found timeout: "
-        f"{config.not_found_timeout_seconds}s, interval: {config.interval_seconds}s",
-    )
+    print(f"Timeout: {config.timeout_seconds}s, interval: {config.interval_seconds}s")
 
     while time.time() < deadline:
         # how long to wait before the next poll; a rate-limit response overrides this
@@ -322,18 +304,6 @@ def wait_for_check(config: Config) -> str:
         except URLError as e:
             last_error = e
             print(f"::warning::API request failed: {e}", file=sys.stderr)
-
-        # give up early if the check name never shows up at all - this usually
-        # means a name mismatch (or an unreachable API) rather than a slow check
-        if not ever_seen and (time.time() - start) >= config.not_found_timeout_seconds:
-            _report_check_never_seen(
-                config,
-                ever_fetched=ever_fetched,
-                last_seen_names=last_seen_names,
-                last_error=last_error,
-                elapsed_label=f"after {config.not_found_timeout_seconds}s",
-            )
-            return "not_found"
 
         remaining = deadline - time.time()
         if remaining <= 0:
@@ -441,12 +411,6 @@ def parse_args(args: list[str] | None = None) -> argparse.Namespace:
         help="Polling interval in seconds (default: 30)",
     )
     parser.add_argument(
-        "--not-found-timeout-seconds",
-        type=int,
-        default=90,
-        help="Time to wait for the check to appear at all before giving up (default: 90)",
-    )
-    parser.add_argument(
         "-v",
         "--verbose",
         action="store_true",
@@ -467,7 +431,6 @@ def main(args: list[str] | None = None) -> int:
             ref=parsed.ref,
             timeout_seconds=parsed.timeout_seconds,
             interval_seconds=parsed.interval_seconds,
-            not_found_timeout_seconds=parsed.not_found_timeout_seconds,
             verbose=parsed.verbose,
         )
     except ValidationError as e:

@@ -39,11 +39,6 @@ on:
         description: "Polling interval in seconds"
         required: false
         default: 30
-      not-found-timeout-seconds:
-        type: number
-        description: "Time to wait for a check to appear at all before giving up"
-        required: false
-        default: 90
       verbose:
         type: boolean
         description: "Log the check-run names seen on each poll"
@@ -132,7 +127,6 @@ jobs:
           ref: ${{ inputs.ref || github.sha }}
           timeout-seconds: ${{ inputs.timeout-seconds }}
           interval-seconds: ${{ inputs.interval-seconds }}
-          not-found-timeout-seconds: ${{ inputs.not-found-timeout-seconds }}
           verbose: ${{ inputs.verbose }}
 
       - name: Report check result

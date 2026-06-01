@@ -19,10 +19,6 @@ inputs:
     description: 'Polling interval in seconds (default: 30)'
     required: false
     default: '30'
-  not-found-timeout-seconds:
-    description: 'Time to wait for the check to appear at all before giving up (default: 90)'
-    required: false
-    default: '90'
   verbose:
     description: 'Log the check-run names seen on each poll (default: false)'
     required: false
@@ -45,7 +41,6 @@ runs:
         INPUT_REF: ${{ inputs.ref }}
         INPUT_TIMEOUT: ${{ inputs.timeout-seconds }}
         INPUT_INTERVAL: ${{ inputs.interval-seconds }}
-        INPUT_NOT_FOUND_TIMEOUT: ${{ inputs.not-found-timeout-seconds }}
         INPUT_VERBOSE: ${{ inputs.verbose }}
         INPUT_REPOSITORY: ${{ github.repository }}
       run: |
@@ -60,5 +55,4 @@ runs:
           --ref "$INPUT_REF" \
           --timeout-seconds "$INPUT_TIMEOUT" \
           --interval-seconds "$INPUT_INTERVAL" \
-          --not-found-timeout-seconds "$INPUT_NOT_FOUND_TIMEOUT" \
           $verbose_flag
