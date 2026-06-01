@@ -1,7 +1,7 @@
 """Unit tests for wait_for_check.py"""
 
 import json
-from urllib.error import URLError
+from urllib.error import HTTPError, URLError
 
 import pytest
 
@@ -568,3 +568,45 @@ class TestWaitForCheckDiagnostics:
         )
 
         assert wait_for_check(_diag_config()) == "success"
+
+
+class TestWaitForCheckAuthErrors:
+    """Tests for fast-failing on auth/permission errors."""
+
+    def test_401_fails_fast(self, monkeypatch, capsys):
+        """A 401 must abort immediately rather than poll to the timeout."""
+        _freeze_clock(monkeypatch)
+        calls: list[int] = []
+
+        def boom(*args, **kwargs):
+            calls.append(1)
+            raise HTTPError("https://api.github.com", 401, "Unauthorized", {}, None)
+
+        monkeypatch.setattr("wait_for_check.fetch_check_runs", boom)
+
+        result = wait_for_check(_diag_config())
+
+        err = capsys.readouterr().err
+        assert result == "auth_error"
+        # only polled once - did not keep retrying
+        assert len(calls) == 1
+        assert "HTTP 401" in err
+
+    @pytest.mark.parametrize("code", [403, 500, 502])
+    def test_non_401_http_error_keeps_polling(self, monkeypatch, code):
+        """Other HTTP errors (incl. 403, which covers rate limits) should be retried."""
+        _freeze_clock(monkeypatch)
+        calls: list[int] = []
+
+        def flaky(*args, **kwargs):
+            calls.append(1)
+            if len(calls) < 3:
+                raise HTTPError("https://api.github.com", code, "Transient", {}, None)
+            return [{"name": "Build", "status": "completed", "conclusion": "success"}]
+
+        monkeypatch.setattr("wait_for_check.fetch_check_runs", flaky)
+
+        result = wait_for_check(_diag_config())
+
+        assert result == "success"
+        assert len(calls) == 3

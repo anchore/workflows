@@ -222,7 +222,8 @@ def wait_for_check(config: Config) -> str:
     """Poll for a check to complete.
 
     Returns:
-        The check conclusion (e.g., "success", "failure", "timed_out", "not_found").
+        The check conclusion (e.g., "success", "failure", "timed_out", "not_found",
+        "auth_error").
     """
     start = time.time()
     deadline = start + config.timeout_seconds
@@ -255,7 +256,23 @@ def wait_for_check(config: Config) -> str:
                     print(f"Check '{config.check_name}' completed with conclusion: {conclusion}")
                     return conclusion
 
-        except (HTTPError, URLError) as e:
+        except HTTPError as e:
+            last_error = e
+            # 401 means the token is invalid or missing - that will never resolve
+            # by polling, so bail immediately rather than burning the whole timeout.
+            # note: 403 is deliberately NOT treated as fatal here, since GitHub also
+            # returns 403 for (transient) secondary rate limits, which retrying clears.
+            if e.code == 401:
+                print(
+                    f"::error::GitHub API returned HTTP 401 ({e.reason}) for ref {config.ref}. "
+                    f"This is an authentication failure (invalid or missing token) that will not "
+                    f"resolve by retrying; verify the token is valid and has 'checks: read' and "
+                    f"'contents: read' permissions.",
+                    file=sys.stderr,
+                )
+                return "auth_error"
+            print(f"::warning::API request failed: {e}", file=sys.stderr)
+        except URLError as e:
             last_error = e
             print(f"::warning::API request failed: {e}", file=sys.stderr)
 
