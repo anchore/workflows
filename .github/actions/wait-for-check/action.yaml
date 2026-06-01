@@ -6,7 +6,7 @@ inputs:
     description: 'GitHub token for API calls'
     required: true
   check-name:
-    description: 'Name of the check to wait for'
+    description: 'Name of the check to wait for (matched case-insensitively and whitespace-trimmed, but in full - no substring matching)'
     required: true
   ref:
     description: 'Git ref (commit SHA) to check'
@@ -19,6 +19,14 @@ inputs:
     description: 'Polling interval in seconds (default: 30)'
     required: false
     default: '30'
+  not-found-timeout-seconds:
+    description: 'Time to wait for the check to appear at all before giving up (default: 60)'
+    required: false
+    default: '60'
+  verbose:
+    description: 'Log the check-run names seen on each poll (default: false)'
+    required: false
+    default: 'false'
 
 outputs:
   conclusion:
@@ -37,12 +45,20 @@ runs:
         INPUT_REF: ${{ inputs.ref }}
         INPUT_TIMEOUT: ${{ inputs.timeout-seconds }}
         INPUT_INTERVAL: ${{ inputs.interval-seconds }}
+        INPUT_NOT_FOUND_TIMEOUT: ${{ inputs.not-found-timeout-seconds }}
+        INPUT_VERBOSE: ${{ inputs.verbose }}
         INPUT_REPOSITORY: ${{ github.repository }}
       run: |
+        verbose_flag=""
+        if [ "$INPUT_VERBOSE" = "true" ]; then
+          verbose_flag="--verbose"
+        fi
         python3 "${{ github.action_path }}/wait_for_check.py" \
           --token "$INPUT_TOKEN" \
           --repository "$INPUT_REPOSITORY" \
           --check-name "$INPUT_CHECK_NAME" \
           --ref "$INPUT_REF" \
           --timeout-seconds "$INPUT_TIMEOUT" \
-          --interval-seconds "$INPUT_INTERVAL"
+          --interval-seconds "$INPUT_INTERVAL" \
+          --not-found-timeout-seconds "$INPUT_NOT_FOUND_TIMEOUT" \
+          $verbose_flag

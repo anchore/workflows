@@ -13,6 +13,10 @@ on:
       version:
         description: tag the latest commit on main with the given version (prefixed with v)
         required: true
+      skip-checks:
+        description: skip the check gate that verifies required checks have passed on main
+        type: boolean
+        default: false
 
 jobs:
   version-available:
@@ -23,6 +27,8 @@ jobs:
       version: ${{ github.event.inputs.version }}
 
   check-gate:
+    # only run the gate when checks have not been explicitly skipped
+    if: ${{ !inputs.skip-checks }}
     permissions:
       checks: read # required for getting the status of specific check names
       contents: read # required for getting wait-for-check code
@@ -37,6 +43,8 @@ jobs:
     needs: [check-gate, version-available]
     environment: release # contains secrets needed for release
     runs-on: ubuntu-24.04
+    # run even when check-gate is skipped, but not when it failed or was cancelled
+    if: ${{ always() && !contains(fromJSON('["failure", "cancelled"]'), needs.check-gate.result) }}
     permissions:
       contents: write # needed for creating github release objects
     steps:

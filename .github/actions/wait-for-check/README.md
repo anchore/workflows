@@ -24,10 +24,12 @@ GitHub Actions workflows sometimes need to wait for other checks to complete bef
 | Input | Required | Default | Description |
 |-------|----------|---------|-------------|
 | `token` | Yes | - | GitHub token for API calls |
-| `check-name` | Yes | - | Name of the check to wait for |
+| `check-name` | Yes | - | Name of the check to wait for. Matched case-insensitively with surrounding whitespace trimmed, but otherwise in full (no substring matching) |
 | `ref` | Yes | - | Git ref (commit SHA) to check |
-| `timeout-seconds` | No | `600` | Maximum time to wait before timing out |
+| `timeout-seconds` | No | `600` | Maximum time to wait for a check to complete before timing out |
 | `interval-seconds` | No | `30` | How often to poll the GitHub API |
+| `not-found-timeout-seconds` | No | `60` | Time to wait for a check with the given name to appear at all (any status) before giving up early. Distinct from `timeout-seconds`, which bounds how long to wait for an already-seen check to complete |
+| `verbose` | No | `false` | Log the check-run names seen on each poll |
 
 ## Outputs
 
@@ -80,5 +82,7 @@ jobs:
 
 - Polls the GitHub API at the specified interval until the check completes or times out
 - Returns `timed_out` as the conclusion if the timeout is reached
+- Returns `not_found` if the named check never appears within `not-found-timeout-seconds` (typically a name mismatch or a check that never started)
 - Handles API errors gracefully with retries
-- The check must match by exact name
+- Matches the check name in full (case-insensitive, whitespace-trimmed) — not by substring
+- When several check runs share the same name, **all** of them must succeed (fails closed)
