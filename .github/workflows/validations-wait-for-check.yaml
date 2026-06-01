@@ -81,20 +81,22 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Wait for bogus check (should timeout)
+      - name: Wait for bogus check (should give up early as not_found)
         id: wait-bogus
         uses: ./.github/actions/wait-for-check
         with:
           token: ${{ github.token }}
           check-name: "this-check-does-not-exist-abc123"
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
-          timeout-seconds: 7
+          timeout-seconds: 12
           interval-seconds: 3
+          # shorter than timeout-seconds so the never-seen give-up fires first
+          not-found-timeout-seconds: 6
 
-      - name: Verify timeout conclusion
-        if: steps.wait-bogus.outputs.conclusion != 'timed_out'
+      - name: Verify not_found conclusion
+        if: steps.wait-bogus.outputs.conclusion != 'not_found'
         run: |
-          echo "::error::Expected 'timed_out' but got: ${STEPS_WAIT_BOGUS_OUTPUTS_CONCLUSION}"
+          echo "::error::Expected 'not_found' but got: ${STEPS_WAIT_BOGUS_OUTPUTS_CONCLUSION}"
           exit 1
         env:
           STEPS_WAIT_BOGUS_OUTPUTS_CONCLUSION: ${{ steps.wait-bogus.outputs.conclusion }}

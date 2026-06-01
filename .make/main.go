@@ -1,8 +1,10 @@
 package main
 
 import (
+	"os"
+
 	. "github.com/anchore/go-make"
-	"github.com/anchore/go-make/run"
+	runopt "github.com/anchore/go-make/run"
 	"github.com/anchore/go-make/tasks/release"
 )
 
@@ -11,6 +13,14 @@ const (
 	runsonTestDir         = "tests"
 	waitForCheckActionDir = ".github/actions/wait-for-check"
 )
+
+// run wraps go-make's Run to stream stdout/stderr to the terminal. go-make's Run
+// captures stdout (returning it as a string) and only forwards stderr, so for our
+// tasks—whose return value we never use—the command's stdout is silently dropped.
+// Use this for any task command whose output the user should actually see.
+func run(cmd string, opts ...runopt.Option) {
+	Run(cmd, append([]runopt.Option{runopt.Stdout(os.Stdout), runopt.Stderr(os.Stderr)}, opts...)...)
+}
 
 func main() {
 	Makefile(
@@ -33,7 +43,7 @@ func main() {
 		Task{
 			Name:        "lint",
 			Description: "Lint github workflows",
-			Run:         func() { Run("wrkflw validate") },
+			Run:         func() { run("wrkflw validate") },
 		},
 
 		runsonTasks(),
@@ -52,38 +62,38 @@ func runsonTasks() Task {
 			{
 				Name:        "runson:lint",
 				Description: "Run ruff linter on runson code",
-				Run:         func() { Run("uv run ruff check .") },
+				Run:         func() { run("uv run ruff check .") },
 			},
 			{
 				Name:        "runson:lint-fix",
 				Description: "Run ruff linter with auto-fix on runson code",
-				Run:         func() { Run("uv run ruff check . --fix") },
+				Run:         func() { run("uv run ruff check . --fix") },
 			},
 			{
 				Name:        "runson:format",
 				Description: "Format runson code with ruff",
-				Run:         func() { Run("uv run ruff format .") },
+				Run:         func() { run("uv run ruff format .") },
 			},
 			{
 				Name:        "runson:format-check",
 				Description: "Check runson code formatting",
-				Run:         func() { Run("uv run ruff format --check .") },
+				Run:         func() { run("uv run ruff format --check .") },
 			},
 			{
 				Name:        "runson:check-types",
 				Description: "Run mypy type checker on runson code",
-				Run:         func() { Run("uv run mypy --config-file ./pyproject.toml " + runsonSrcDir) },
+				Run:         func() { run("uv run mypy --config-file ./pyproject.toml " + runsonSrcDir) },
 			},
 			{
 				Name:        "runson:test",
 				Description: "Run runson tests with pytest",
-				Run:         func() { Run("uv run pytest " + runsonTestDir + " -v") },
+				Run:         func() { run("uv run pytest " + runsonTestDir + " -v") },
 			},
 			{
 				Name:        "runson:test-cov",
 				Description: "Run runson tests with coverage",
 				Run: func() {
-					Run("uv run pytest " + runsonTestDir + " -v --cov=" + runsonSrcDir + " --cov-report=html")
+					run("uv run pytest " + runsonTestDir + " -v --cov=" + runsonSrcDir + " --cov-report=html")
 				},
 			},
 		},
@@ -93,7 +103,9 @@ func runsonTasks() Task {
 func waitForCheckTasks() Task {
 	// wait-for-check has its own pyproject.toml inside the action directory; tooling
 	// runs from there so ruff/pytest pick up the right config.
-	inDir := func(cmd string) { Run(cmd, run.InDir(waitForCheckActionDir)) }
+	inDir := func(cmd string) {
+		run(cmd, runopt.InDir(waitForCheckActionDir))
+	}
 	ruffCmd := func(args string) func() {
 		return func() {
 			inDir("pip install ruff -q")

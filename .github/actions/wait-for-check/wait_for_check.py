@@ -18,6 +18,12 @@ from typing import NamedTuple
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
+# github caps check-runs responses at 100 per page
+PER_PAGE = 100
+
+# safety bound on pagination so a misbehaving API can't loop forever
+MAX_PAGES = 10
+
 
 class Config(NamedTuple):
     """Validated configuration for the wait operation."""
@@ -28,6 +34,11 @@ class Config(NamedTuple):
     ref: str
     timeout_seconds: int
     interval_seconds: int
+    # how long to wait for a check with the given name to appear at all (any
+    # status) before giving up early. distinct from timeout_seconds, which
+    # bounds how long we wait for an already-seen check to complete.
+    not_found_timeout_seconds: int = 90
+    verbose: bool = False
 
 
 class ValidationError(Exception):
@@ -41,6 +52,8 @@ def validate_config(
     ref: str | None,
     timeout_seconds: int,
     interval_seconds: int,
+    not_found_timeout_seconds: int = 90,
+    verbose: bool = False,
 ) -> Config:
     """Validate all inputs and return a Config object.
 
@@ -75,6 +88,15 @@ def validate_config(
     if interval_seconds >= timeout_seconds:
         errors.append(f"interval_seconds ({interval_seconds}) must be less than timeout_seconds ({timeout_seconds})")
 
+    if not_found_timeout_seconds <= 0:
+        errors.append(f"not_found_timeout_seconds must be positive, got: {not_found_timeout_seconds}")
+    elif not_found_timeout_seconds >= timeout_seconds:
+        # otherwise the early give-up never fires - the full timeout is reached first
+        errors.append(
+            f"not_found_timeout_seconds ({not_found_timeout_seconds}) must be less than "
+            f"timeout_seconds ({timeout_seconds})"
+        )
+
     if errors:
         raise ValidationError("; ".join(errors))
 
@@ -85,40 +107,150 @@ def validate_config(
         ref=ref,  # type: ignore[arg-type]
         timeout_seconds=timeout_seconds,
         interval_seconds=interval_seconds,
+        not_found_timeout_seconds=not_found_timeout_seconds,
+        verbose=verbose,
     )
 
 
 def fetch_check_runs(token: str, repository: str, ref: str) -> list[dict]:
-    """Fetch check runs for a commit from GitHub API.
+    """Fetch all check runs for a commit from GitHub API, following pagination.
 
     Returns:
-        List of check run dictionaries.
+        List of check run dictionaries across all pages.
 
     Raises:
         URLError: If the API request fails.
     """
-    url = f"https://api.github.com/repos/{repository}/commits/{ref}/check-runs"
+    runs: list[dict] = []
 
-    request = Request(url)  # noqa: S310
-    request.add_header("Authorization", f"Bearer {token}")
-    request.add_header("Accept", "application/vnd.github+json")
-    request.add_header("X-GitHub-Api-Version", "2022-11-28")
-    request.add_header("User-Agent", "wait-for-check-action")
+    for page in range(1, MAX_PAGES + 1):
+        url = f"https://api.github.com/repos/{repository}/commits/{ref}/check-runs?per_page={PER_PAGE}&page={page}"
 
-    with urlopen(request, timeout=30) as response:  # noqa: S310
-        data = json.loads(response.read().decode("utf-8"))
-        return data.get("check_runs", [])
+        request = Request(url)  # noqa: S310
+        request.add_header("Authorization", f"Bearer {token}")
+        request.add_header("Accept", "application/vnd.github+json")
+        request.add_header("X-GitHub-Api-Version", "2022-11-28")
+        request.add_header("User-Agent", "wait-for-check-action")
+
+        with urlopen(request, timeout=30) as response:  # noqa: S310
+            data = json.loads(response.read().decode("utf-8"))
+
+        batch = data.get("check_runs", [])
+        runs.extend(batch)
+
+        total = data.get("total_count", 0)
+        # stop once we've drained a short page or collected everything reported
+        if not batch or len(batch) < PER_PAGE or len(runs) >= total:
+            break
+    else:
+        # loop ran the full range without breaking: we hit the page cap and
+        # may not have examined every check run on the ref
+        print(
+            f"::warning::Reached pagination cap of {MAX_PAGES} pages "
+            f"({MAX_PAGES * PER_PAGE} check runs); some check runs may not have been examined.",
+        )
+
+    return runs
 
 
-def find_completed_check(check_runs: list[dict], check_name: str) -> str | None:
-    """Find a completed check with the given name.
+def _normalize(name: str) -> str:
+    """Fold case and trim whitespace so trivial name differences still match."""
+    return name.strip().casefold()
+
+
+def find_matching_checks(check_runs: list[dict], check_name: str) -> list[dict]:
+    """Return all check runs whose name matches check_name.
+
+    Matching is case-insensitive and whitespace-trimmed, but otherwise a full
+    name match (no partial/substring matching).
+    """
+    target = _normalize(check_name)
+    return [c for c in check_runs if _normalize(c.get("name") or "") == target]
+
+
+def resolve_conclusion(matches: list[dict]) -> str | None:
+    """Resolve a final conclusion from matching check runs.
+
+    Fails closed for duplicates: if multiple checks share the name, every one
+    must complete successfully. Returns None while any matching run is still
+    pending (we wait for the full set before deciding).
+
+    What counts as a "duplicate" here is worth being precise about, because it
+    determines whether this fail-closed branch ever fires:
+
+    - NOT re-runs / repeated attempts of the same job. The check-runs-for-ref
+      endpoint defaults to filter=latest, which collapses superseded attempts
+      within a check suite, so a re-run replaces (not duplicates) the prior run.
+    - IS two *different* workflows that each define a job with the same name on
+      the same commit. GitHub Actions creates one check suite per workflow run
+      (a single commit routinely has several Actions suites), and filter=latest
+      dedupes within a suite, not globally by name across the ref - so both
+      same-named runs are returned.
+    - IS a same-named check posted by a *different* app (e.g. a status-check bot
+      or external CI), which lives in its own suite and is likewise returned.
+
+    For a single repo today this is usually defensive rather than load-bearing:
+    job names are unique within a workflow, so duplicates only appear once a
+    second workflow (or app) reuses a gated check's name. Treating the worst
+    matching conclusion as the verdict keeps a name collision from silently
+    letting a failure through the gate.
 
     Returns:
-        The conclusion string if found and completed, None otherwise.
+        The conclusion string once all matching runs complete, None otherwise.
     """
-    for check in check_runs:
-        if check.get("name") == check_name and check.get("status") == "completed":
-            return check.get("conclusion")
+    # no matches means nothing has resolved yet - never report success here
+    if not matches:
+        return None
+
+    if any(c.get("status") != "completed" for c in matches):
+        return None
+
+    # all matching runs completed: succeed only if every one succeeded,
+    # otherwise surface a non-success conclusion so the gate fails
+    for c in matches:
+        if c.get("conclusion") != "success":
+            return c.get("conclusion") or "failure"
+    return "success"
+
+
+def _seen_names(check_runs: list[dict]) -> list[str]:
+    """Return the sorted, de-duplicated set of check-run names seen."""
+    return sorted({(c.get("name") or "") for c in check_runs})
+
+
+def _rate_limit_delay(error: HTTPError) -> float | None:
+    """Return how many seconds to wait before retrying a rate-limited response.
+
+    GitHub signals rate limiting on a 403/429 in one of two ways:
+    - a Retry-After header (delta-seconds), used for secondary rate limits, or
+    - x-ratelimit-remaining: 0 plus an x-ratelimit-reset epoch, for primary limits.
+
+    Returns None if the response does not look rate-limited, so the caller falls
+    back to the normal polling interval. Header lookups are case-insensitive.
+    """
+    if error.code not in (403, 429):
+        return None
+
+    headers = error.headers
+    if headers is None:
+        return None
+
+    retry_after = headers.get("Retry-After")
+    if retry_after is not None:
+        try:
+            # github sends delta-seconds here; ignore the rarer HTTP-date form
+            return max(0.0, float(retry_after))
+        except ValueError:
+            return None
+
+    if headers.get("X-RateLimit-Remaining") == "0":
+        reset = headers.get("X-RateLimit-Reset")
+        if reset is not None:
+            try:
+                return max(0.0, float(reset) - time.time())
+            except ValueError:
+                return None
+
     return None
 
 
@@ -126,31 +258,153 @@ def wait_for_check(config: Config) -> str:
     """Poll for a check to complete.
 
     Returns:
-        The check conclusion (e.g., "success", "failure", "timed_out").
+        The check conclusion (e.g., "success", "failure", "timed_out", "not_found",
+        "auth_error").
     """
-    deadline = time.time() + config.timeout_seconds
+    start = time.time()
+    deadline = start + config.timeout_seconds
+    ever_seen = False
+    ever_fetched = False
+    last_error: Exception | None = None
+    last_seen_names: list[str] = []
 
     print(f"Waiting for check '{config.check_name}' on ref {config.ref}")
-    print(f"Timeout: {config.timeout_seconds}s, Interval: {config.interval_seconds}s")
+    print(
+        f"Timeout: {config.timeout_seconds}s, not-found timeout: "
+        f"{config.not_found_timeout_seconds}s, interval: {config.interval_seconds}s",
+    )
 
     while time.time() < deadline:
+        # how long to wait before the next poll; a rate-limit response overrides this
+        rate_limit_delay: float | None = None
         try:
             check_runs = fetch_check_runs(config.token, config.repository, config.ref)
-            conclusion = find_completed_check(check_runs, config.check_name)
+            ever_fetched = True
+            last_error = None
+            last_seen_names = _seen_names(check_runs)
 
-            if conclusion is not None:
-                print(f"Check '{config.check_name}' completed with conclusion: {conclusion}")
-                return conclusion
+            if config.verbose:
+                print(f"Saw {len(check_runs)} check run(s) on ref: {', '.join(last_seen_names) or '(none)'}")
 
-        except (HTTPError, URLError) as e:
+            matches = find_matching_checks(check_runs, config.check_name)
+            if matches:
+                ever_seen = True
+                conclusion = resolve_conclusion(matches)
+                if conclusion is not None:
+                    print(f"Check '{config.check_name}' completed with conclusion: {conclusion}")
+                    return conclusion
+
+        except HTTPError as e:
+            last_error = e
+            # 401 means the token is invalid or missing - that will never resolve
+            # by polling, so bail immediately rather than burning the whole timeout.
+            # note: 403 is deliberately NOT treated as fatal here, since GitHub also
+            # returns 403 for (transient) secondary rate limits, which retrying clears.
+            if e.code == 401:
+                print(
+                    f"::error::GitHub API returned HTTP 401 ({e.reason}) for ref {config.ref}. "
+                    f"This is an authentication failure (invalid or missing token) that will not "
+                    f"resolve by retrying; verify the token is valid and has 'checks: read' and "
+                    f"'contents: read' permissions.",
+                    file=sys.stderr,
+                )
+                return "auth_error"
+            # back off until the window resets if GitHub told us we're rate limited
+            rate_limit_delay = _rate_limit_delay(e)
+            if rate_limit_delay is not None:
+                print(
+                    f"::warning::GitHub API rate limit hit (HTTP {e.code}); waiting "
+                    f"{int(rate_limit_delay)}s for the limit to reset.",
+                    file=sys.stderr,
+                )
+            else:
+                print(f"::warning::API request failed: {e}", file=sys.stderr)
+        except URLError as e:
+            last_error = e
             print(f"::warning::API request failed: {e}", file=sys.stderr)
 
-        remaining = int(deadline - time.time())
-        print(f"Check '{config.check_name}' not complete yet. {remaining}s remaining...")
-        time.sleep(config.interval_seconds)
+        # give up early if the check name never shows up at all - this usually
+        # means a name mismatch (or an unreachable API) rather than a slow check
+        if not ever_seen and (time.time() - start) >= config.not_found_timeout_seconds:
+            _report_check_never_seen(
+                config,
+                ever_fetched=ever_fetched,
+                last_seen_names=last_seen_names,
+                last_error=last_error,
+                elapsed_label=f"after {config.not_found_timeout_seconds}s",
+            )
+            return "not_found"
 
-    print(f"::warning::Timed out after {config.timeout_seconds}s waiting for check '{config.check_name}'")
+        remaining = deadline - time.time()
+        if remaining <= 0:
+            break
+
+        # honor a rate-limit reset when present, but never poll faster than the
+        # configured interval and never sleep past the overall deadline
+        sleep_seconds = config.interval_seconds
+        if rate_limit_delay is not None:
+            sleep_seconds = max(config.interval_seconds, rate_limit_delay)
+        sleep_seconds = min(sleep_seconds, remaining)
+
+        state = "seen, waiting to complete" if ever_seen else "not found yet"
+        print(f"Check '{config.check_name}' {state}. {int(remaining)}s remaining...")
+        time.sleep(sleep_seconds)
+
+    # full timeout reached
+    if ever_seen:
+        print(
+            f"::warning::Timed out after {config.timeout_seconds}s: check "
+            f"'{config.check_name}' was found but never reached a completed state.",
+        )
+    else:
+        _report_check_never_seen(
+            config,
+            ever_fetched=ever_fetched,
+            last_seen_names=last_seen_names,
+            last_error=last_error,
+            elapsed_label=f"after the full {config.timeout_seconds}s timeout",
+        )
     return "timed_out"
+
+
+def _report_check_never_seen(
+    config: Config,
+    *,
+    ever_fetched: bool,
+    last_seen_names: list[str],
+    last_error: Exception | None,
+    elapsed_label: str,
+) -> None:
+    """Explain why a named check never appeared, distinguishing the likely cause.
+
+    If we never managed a single successful API call, the check name says nothing -
+    the real problem is connectivity. Otherwise it almost always means the name does
+    not match any check run on the ref.
+    """
+    if not ever_fetched and last_error is not None:
+        print(
+            f"::error::Gave up {elapsed_label} on check '{config.check_name}' (ref {config.ref}): "
+            f"every GitHub API request failed, so check status could not be determined "
+            f"(last error: {last_error}).",
+        )
+        return
+
+    print(
+        f"::error::Check '{config.check_name}' was not found on ref {config.ref} {elapsed_label}. "
+        f"This usually means the check name does not match any check run (typo, wrong "
+        f"workflow, or the check never started).",
+    )
+    _report_available_checks(last_seen_names)
+
+
+def _report_available_checks(names: list[str]) -> None:
+    """Log the check names that were actually observed, to aid debugging mismatches."""
+    if not names:
+        print("::warning::No check runs were observed on the ref.")
+        return
+    print(f"Check runs observed on the ref ({len(names)}):")
+    for name in names:
+        print(f"  - {name}")
 
 
 def write_output(name: str, value: str) -> None:
@@ -186,6 +440,18 @@ def parse_args(args: list[str] | None = None) -> argparse.Namespace:
         default=30,
         help="Polling interval in seconds (default: 30)",
     )
+    parser.add_argument(
+        "--not-found-timeout-seconds",
+        type=int,
+        default=90,
+        help="Time to wait for the check to appear at all before giving up (default: 90)",
+    )
+    parser.add_argument(
+        "-v",
+        "--verbose",
+        action="store_true",
+        help="Log the check-run names seen on each poll",
+    )
     return parser.parse_args(args)
 
 
@@ -201,6 +467,8 @@ def main(args: list[str] | None = None) -> int:
             ref=parsed.ref,
             timeout_seconds=parsed.timeout_seconds,
             interval_seconds=parsed.interval_seconds,
+            not_found_timeout_seconds=parsed.not_found_timeout_seconds,
+            verbose=parsed.verbose,
         )
     except ValidationError as e:
         print(f"::error::Validation failed: {e}")
