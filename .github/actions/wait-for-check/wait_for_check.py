@@ -37,7 +37,7 @@ class Config(NamedTuple):
     # how long to wait for a check with the given name to appear at all (any
     # status) before giving up early. distinct from timeout_seconds, which
     # bounds how long we wait for an already-seen check to complete.
-    not_found_timeout_seconds: int = 60
+    not_found_timeout_seconds: int = 90
     verbose: bool = False
 
 
@@ -52,7 +52,7 @@ def validate_config(
     ref: str | None,
     timeout_seconds: int,
     interval_seconds: int,
-    not_found_timeout_seconds: int = 60,
+    not_found_timeout_seconds: int = 90,
     verbose: bool = False,
 ) -> Config:
     """Validate all inputs and return a Config object.
@@ -218,6 +218,42 @@ def _seen_names(check_runs: list[dict]) -> list[str]:
     return sorted({(c.get("name") or "") for c in check_runs})
 
 
+def _rate_limit_delay(error: HTTPError) -> float | None:
+    """Return how many seconds to wait before retrying a rate-limited response.
+
+    GitHub signals rate limiting on a 403/429 in one of two ways:
+    - a Retry-After header (delta-seconds), used for secondary rate limits, or
+    - x-ratelimit-remaining: 0 plus an x-ratelimit-reset epoch, for primary limits.
+
+    Returns None if the response does not look rate-limited, so the caller falls
+    back to the normal polling interval. Header lookups are case-insensitive.
+    """
+    if error.code not in (403, 429):
+        return None
+
+    headers = error.headers
+    if headers is None:
+        return None
+
+    retry_after = headers.get("Retry-After")
+    if retry_after is not None:
+        try:
+            # github sends delta-seconds here; ignore the rarer HTTP-date form
+            return max(0.0, float(retry_after))
+        except ValueError:
+            return None
+
+    if headers.get("X-RateLimit-Remaining") == "0":
+        reset = headers.get("X-RateLimit-Reset")
+        if reset is not None:
+            try:
+                return max(0.0, float(reset) - time.time())
+            except ValueError:
+                return None
+
+    return None
+
+
 def wait_for_check(config: Config) -> str:
     """Poll for a check to complete.
 
@@ -239,6 +275,8 @@ def wait_for_check(config: Config) -> str:
     )
 
     while time.time() < deadline:
+        # how long to wait before the next poll; a rate-limit response overrides this
+        rate_limit_delay: float | None = None
         try:
             check_runs = fetch_check_runs(config.token, config.repository, config.ref)
             ever_fetched = True
@@ -271,7 +309,16 @@ def wait_for_check(config: Config) -> str:
                     file=sys.stderr,
                 )
                 return "auth_error"
-            print(f"::warning::API request failed: {e}", file=sys.stderr)
+            # back off until the window resets if GitHub told us we're rate limited
+            rate_limit_delay = _rate_limit_delay(e)
+            if rate_limit_delay is not None:
+                print(
+                    f"::warning::GitHub API rate limit hit (HTTP {e.code}); waiting "
+                    f"{int(rate_limit_delay)}s for the limit to reset.",
+                    file=sys.stderr,
+                )
+            else:
+                print(f"::warning::API request failed: {e}", file=sys.stderr)
         except URLError as e:
             last_error = e
             print(f"::warning::API request failed: {e}", file=sys.stderr)
@@ -288,10 +335,20 @@ def wait_for_check(config: Config) -> str:
             )
             return "not_found"
 
-        remaining = int(deadline - time.time())
+        remaining = deadline - time.time()
+        if remaining <= 0:
+            break
+
+        # honor a rate-limit reset when present, but never poll faster than the
+        # configured interval and never sleep past the overall deadline
+        sleep_seconds = config.interval_seconds
+        if rate_limit_delay is not None:
+            sleep_seconds = max(config.interval_seconds, rate_limit_delay)
+        sleep_seconds = min(sleep_seconds, remaining)
+
         state = "seen, waiting to complete" if ever_seen else "not found yet"
-        print(f"Check '{config.check_name}' {state}. {remaining}s remaining...")
-        time.sleep(config.interval_seconds)
+        print(f"Check '{config.check_name}' {state}. {int(remaining)}s remaining...")
+        time.sleep(sleep_seconds)
 
     # full timeout reached
     if ever_seen:
@@ -386,8 +443,8 @@ def parse_args(args: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--not-found-timeout-seconds",
         type=int,
-        default=60,
-        help="Time to wait for the check to appear at all before giving up (default: 60)",
+        default=90,
+        help="Time to wait for the check to appear at all before giving up (default: 90)",
     )
     parser.add_argument(
         "-v",

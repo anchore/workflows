@@ -43,8 +43,14 @@ jobs:
     needs: [check-gate, version-available]
     environment: release # contains secrets needed for release
     runs-on: ubuntu-24.04
-    # run even when check-gate is skipped, but not when it failed or was cancelled
-    if: ${{ always() && !contains(fromJSON('["failure", "cancelled"]'), needs.check-gate.result) }}
+    # run even when check-gate is skipped, but never when version-available
+    # failed/was skipped, nor when check-gate failed or was cancelled. note:
+    # always() disables the implicit success() gate on ALL needs, so the
+    # version-available requirement must be re-asserted explicitly here.
+    if: >-
+      ${{ always()
+          && needs.version-available.result == 'success'
+          && !contains(fromJSON('["failure", "cancelled"]'), needs.check-gate.result) }}
     permissions:
       contents: write # needed for creating github release objects
     steps:

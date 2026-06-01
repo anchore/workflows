@@ -20,9 +20,9 @@ inputs:
     required: false
     default: '30'
   not-found-timeout-seconds:
-    description: 'Time to wait for the check to appear at all before giving up (default: 60)'
+    description: 'Time to wait for the check to appear at all before giving up (default: 90)'
     required: false
-    default: '60'
+    default: '90'
   verbose:
     description: 'Log the check-run names seen on each poll (default: false)'
     required: false

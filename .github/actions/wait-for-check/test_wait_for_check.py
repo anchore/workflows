@@ -1,6 +1,7 @@
 """Unit tests for wait_for_check.py"""
 
 import json
+from email.message import Message
 from urllib.error import HTTPError, URLError
 
 import pytest
@@ -138,7 +139,7 @@ class TestValidateConfig:
             timeout_seconds=600,
             interval_seconds=30,
         )
-        assert config.not_found_timeout_seconds == 60
+        assert config.not_found_timeout_seconds == 90
         assert config.verbose is False
 
     def test_interval_greater_than_timeout(self):
@@ -384,7 +385,7 @@ class TestParseArgs:
         )
         assert args.timeout_seconds == 600
         assert args.interval_seconds == 30
-        assert args.not_found_timeout_seconds == 60
+        assert args.not_found_timeout_seconds == 90
         assert args.verbose is False
 
     def test_missing_required_arg(self):
@@ -569,6 +570,22 @@ class TestWaitForCheckDiagnostics:
 
         assert wait_for_check(_diag_config()) == "success"
 
+    def test_seen_but_never_completes_times_out(self, monkeypatch, capsys):
+        """A check that is found but stays in_progress past the timeout is timed_out, not not_found."""
+        _freeze_clock(monkeypatch)
+        monkeypatch.setattr(
+            "wait_for_check.fetch_check_runs",
+            lambda *a, **k: [{"name": "Build", "status": "in_progress", "conclusion": None}],
+        )
+
+        result = wait_for_check(_diag_config())
+
+        out = capsys.readouterr().out
+        assert result == "timed_out"
+        # the never-seen diagnostics must not fire when the check was actually seen
+        assert "found but never reached a completed state" in out
+        assert "does not match" not in out
+
 
 class TestWaitForCheckAuthErrors:
     """Tests for fast-failing on auth/permission errors."""
@@ -610,3 +627,102 @@ class TestWaitForCheckAuthErrors:
 
         assert result == "success"
         assert len(calls) == 3
+
+
+def _recording_clock(monkeypatch):
+    """Like _freeze_clock, but also records each slept duration in order."""
+    clock = {"now": 1000.0}
+    sleeps: list[float] = []
+    monkeypatch.setattr("wait_for_check.time.time", lambda: clock["now"])
+
+    def sleep(s):
+        sleeps.append(s)
+        clock["now"] += s
+
+    monkeypatch.setattr("wait_for_check.time.sleep", sleep)
+    return clock, sleeps
+
+
+def _rate_limited_error(code, headers):
+    """Build an HTTPError carrying case-insensitive headers, like a real response."""
+    message = Message()
+    for key, value in headers.items():
+        message[key] = value
+    return HTTPError("https://api.github.com", code, "Rate limited", message, None)
+
+
+class TestWaitForCheckRateLimits:
+    """Tests for honoring GitHub rate-limit headers when backing off."""
+
+    def test_honors_retry_after(self, monkeypatch):
+        """A Retry-After header should drive the backoff instead of the interval."""
+        _, sleeps = _recording_clock(monkeypatch)
+        calls: list[int] = []
+
+        def flaky(*args, **kwargs):
+            calls.append(1)
+            if len(calls) == 1:
+                raise _rate_limited_error(403, {"Retry-After": "45"})
+            return [{"name": "Build", "status": "completed", "conclusion": "success"}]
+
+        monkeypatch.setattr("wait_for_check.fetch_check_runs", flaky)
+
+        result = wait_for_check(_diag_config(timeout_seconds=600, not_found_timeout_seconds=120))
+
+        assert result == "success"
+        assert sleeps == [45]
+
+    def test_honors_ratelimit_reset(self, monkeypatch):
+        """x-ratelimit-remaining: 0 + reset epoch should drive the backoff."""
+        _, sleeps = _recording_clock(monkeypatch)
+        calls: list[int] = []
+
+        def flaky(*args, **kwargs):
+            calls.append(1)
+            if len(calls) == 1:
+                # clock starts at 1000.0, so a reset at 1030 means a 30s wait
+                raise _rate_limited_error(
+                    403,
+                    {"X-RateLimit-Remaining": "0", "X-RateLimit-Reset": "1030"},
+                )
+            return [{"name": "Build", "status": "completed", "conclusion": "success"}]
+
+        monkeypatch.setattr("wait_for_check.fetch_check_runs", flaky)
+
+        result = wait_for_check(_diag_config(timeout_seconds=600, not_found_timeout_seconds=120))
+
+        assert result == "success"
+        assert sleeps == [30]
+
+    def test_plain_403_uses_interval(self, monkeypatch):
+        """A 403 with no rate-limit headers falls back to the normal interval."""
+        _, sleeps = _recording_clock(monkeypatch)
+        calls: list[int] = []
+
+        def flaky(*args, **kwargs):
+            calls.append(1)
+            if len(calls) == 1:
+                raise _rate_limited_error(403, {})
+            return [{"name": "Build", "status": "completed", "conclusion": "success"}]
+
+        monkeypatch.setattr("wait_for_check.fetch_check_runs", flaky)
+
+        result = wait_for_check(_diag_config(interval_seconds=7, timeout_seconds=600))
+
+        assert result == "success"
+        assert sleeps == [7]
+
+    def test_reset_capped_to_deadline(self, monkeypatch):
+        """A reset beyond the deadline should not sleep past the timeout."""
+        _, sleeps = _recording_clock(monkeypatch)
+
+        def always_rate_limited(*args, **kwargs):
+            raise _rate_limited_error(403, {"Retry-After": "100000"})
+
+        monkeypatch.setattr("wait_for_check.fetch_check_runs", always_rate_limited)
+
+        result = wait_for_check(_diag_config(timeout_seconds=10, not_found_timeout_seconds=9))
+
+        assert result == "timed_out"
+        # never slept longer than the remaining budget
+        assert all(s <= 10 for s in sleeps)

@@ -43,7 +43,7 @@ on:
         type: number
         description: "Time to wait for a check to appear at all before giving up"
         required: false
-        default: 60
+        default: 90
       verbose:
         type: boolean
         description: "Log the check-run names seen on each poll"
