@@ -92,6 +92,13 @@ jobs:
     # substrings of one another (go, actions, python, javascript). Revisit if
     # adding a language whose name overlaps (e.g. "java" would match "javascript").
     if: contains(inputs.languages, 'go')
+    # permissions must be re-declared here: this job calls a nested reusable
+    # workflow, and nested permissions can only be restricted (never granted) as
+    # they cascade down. Without this block the top-level `permissions: {}` zeroes
+    # the token before it reaches codeql-go.yaml's run job.
+    permissions:
+      security-events: write
+      contents: read
     uses: ./.github/workflows/codeql-go.yaml
     with:
       working-directory: ${{ inputs.go-working-directory }}
@@ -104,6 +111,9 @@ jobs:
   actions:
     name: "Actions"
     if: contains(inputs.languages, 'actions')
+    permissions:
+      security-events: write
+      contents: read
     uses: ./.github/workflows/codeql-actions.yaml
     with:
       queries: ${{ inputs.queries }}
@@ -113,6 +123,9 @@ jobs:
   python:
     name: "Python"
     if: contains(inputs.languages, 'python')
+    permissions:
+      security-events: write
+      contents: read
     uses: ./.github/workflows/codeql-python.yaml
     with:
       queries: ${{ inputs.queries }}
@@ -124,6 +137,9 @@ jobs:
     # matches both "javascript" and the canonical "javascript-typescript"
     # extractor id; the per-language workflow uses the latter internally.
     if: contains(inputs.languages, 'javascript')
+    permissions:
+      security-events: write
+      contents: read
     uses: ./.github/workflows/codeql-javascript.yaml
     with:
       queries: ${{ inputs.queries }}
