@@ -1,0 +1,36 @@
+name: "Check-version-available Validations"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - ".github/workflows/check-version-available.yaml"
+      - ".github/workflows/validations-check-version-available.yaml"
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/check-version-available.yaml"
+
+permissions: {}
+
+# functionally tests check-version-available.yaml by calling it the way real
+# release pipelines do. we only exercise the happy path here: jobs that call a
+# reusable workflow cannot use continue-on-error, so a failing call shows up as
+# a red job on the PR -- which is indistinguishable from a real regression. the
+# version-format validation logic is covered by unit-style assertions elsewhere;
+# this workflow just proves the reusable workflow wires up and succeeds.
+jobs:
+  # well-formed semver that does not already exist as a tag -> should pass and
+  # exercise the job-summary path (summarize defaults to true).
+  valid-new-version:
+    name: "Validation test"
+    permissions:
+      contents: read  # for the reusable workflow's tag-existence check
+    uses: ./.github/workflows/check-version-available.yaml
+    with:
+      version: "v99.99.99"
