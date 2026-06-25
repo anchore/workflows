@@ -28,8 +28,13 @@ on:
     inputs:
       version:
         type: string
-        description: 'Version to validate (must have v prefix, e.g., v1.2.3)'
+        description: "Version to validate (must have v prefix, e.g., v1.2.3)"
         required: true
+      summarize:
+        type: boolean
+        description: "Write the pending-release version/changelog info to the job summary"
+        required: false
+        default: true
 
 permissions: {}
 
@@ -38,7 +43,7 @@ jobs:
     name: "Validate"
     runs-on: ubuntu-24.04
     permissions:
-      contents: read  # for checking existing tags via gh api
+      contents: read # for checking existing tags via gh api
     steps:
       - name: Validate version format
         env:
@@ -83,3 +88,122 @@ jobs:
           fi
 
           echo "Tag does not exist: ${VERSION}"
+
+      - name: Write release info to job summary
+        # never let summary generation affect the outcome of this job or any
+        # downstream jobs/steps. skipped entirely when summarize is false (e.g.
+        # to keep validation runs from flooding the summary page).
+        if: always() && inputs.summarize
+        continue-on-error: true
+        env:
+          VERSION: ${{ inputs.version }}
+          # github.sha resolves to the caller's triggering commit, so this
+          # records the exact commit the release is being cut from.
+          SHA: ${{ github.sha }}
+          REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          REGISTRY="ghcr.io"
+          # changelogs are published per-repo, tagged by the commit sha, e.g.
+          # ghcr.io/anchore/changelog/syft:<sha>
+          IMAGE="anchore/changelog/${REPO##*/}"
+
+          # lightweight tracing so empty/failed changelog lookups are debuggable
+          # from the job log. these go to stdout, never the step summary.
+          log() { echo "[changelog] $*"; }
+          log "repo=${REPO} sha=${SHA} image=${IMAGE}"
+
+          changelog=""
+
+          # the changelog packages are public, so an anonymous token grants
+          # pull access -- no credentials needed here. --retry-all-errors backs
+          # off on transient 429/5xx (anonymous pulls share the runner egress IP
+          # pool, so an occasional rate-limit is possible).
+          #
+          # we deliberately stay anonymous: authenticating to GHCR would require
+          # `packages: read`, and a reusable workflow cannot grant itself more
+          # token scope than the caller provides -- so every calling workflow
+          # would then have to add `packages: read` to the job that invokes us.
+          # since the packages are public and a dropped changelog only degrades
+          # the summary (never fails the release), the extra caller coupling
+          # isn't worth it.
+          CURL_RETRY=(--retry 3 --retry-delay 2 --retry-all-errors)
+          token=$(curl -fsSL "${CURL_RETRY[@]}" \
+            "https://${REGISTRY}/token?service=${REGISTRY}&scope=repository:${IMAGE}:pull" \
+            2>/dev/null | jq -r '.token // empty' || true)
+
+          # the derived registry token is not a registered secret, so Actions
+          # won't auto-mask it; register it so it can never surface in logs.
+          [[ -n "${token}" ]] && echo "::add-mask::${token}"
+
+          if [[ -z "${token}" ]]; then
+            log "no anonymous pull token (private package or rate-limited?) -> skipping changelog lookup"
+          else
+            log "got anonymous pull token; fetching manifest for ${IMAGE}:${SHA}"
+            # fetch the OCI manifest for this commit (404s quietly if none exists)
+            manifest=$(curl -fsSL "${CURL_RETRY[@]}" \
+              --config <(printf 'header = "Authorization: Bearer %s"\n' "${token}") \
+              -H "Accept: application/vnd.oci.image.manifest.v1+json" \
+              "https://${REGISTRY}/v2/${IMAGE}/manifests/${SHA}" 2>/dev/null || true)
+
+            if [[ -z "${manifest}" ]]; then
+              log "no manifest for ${IMAGE}:${SHA} (no changelog published for this commit)"
+            else
+              # oras annotates each file layer with its filename; grab the .md blob
+              digest=$(jq -r '
+                .layers[]?
+                | select((.annotations["org.opencontainers.image.title"] // "") | test("\\.md$"; "i"))
+                | .digest' <<<"${manifest}" | head -n1)
+
+              if [[ -z "${digest}" || "${digest}" == "null" ]]; then
+                log "manifest found but no .md layer; titles seen: $(jq -rc '[.layers[]?.annotations["org.opencontainers.image.title"] // empty]' <<<"${manifest}")"
+              else
+                log "found changelog layer ${digest}; fetching blob"
+                changelog=$(curl -fsSL "${CURL_RETRY[@]}" \
+                  --config <(printf 'header = "Authorization: Bearer %s"\n' "${token}") \
+                  "https://${REGISTRY}/v2/${IMAGE}/blobs/${digest}" 2>/dev/null || true)
+                [[ -z "${changelog}" ]] && log "blob fetch returned an empty body"
+              fi
+            fi
+          fi
+
+          # anchor a "since last release" compare link. releases/latest is the
+          # published release (skips drafts/prereleases), which is a better
+          # baseline than simply the newest tag.
+          compare_url=""
+          last_tag=$(gh api "repos/${REPO}/releases/latest" --jq '.tag_name' 2>/dev/null || true)
+          if [[ -n "${last_tag}" && "${last_tag}" != "null" ]]; then
+            compare_url="https://github.com/${REPO}/compare/${last_tag}...${SHA}"
+            log "last release tag=${last_tag}; compare link enabled"
+          else
+            log "no published release found; omitting compare link"
+          fi
+
+          if [[ -n "${changelog}" ]]; then
+            log "rendering changelog (${#changelog} bytes) to job summary"
+            # found a stored changelog: render it instead of the bare version
+            {
+              echo "## Pending Release Changelog — \`${VERSION}\` _(commit \`${SHA}\`)_"
+              echo ""
+              if [[ -n "${compare_url}" ]]; then
+                echo ""
+                echo "**Full changes since ${last_tag}:** ${compare_url}"
+              fi
+              echo ""
+              echo "${changelog}"
+            } >> "${GITHUB_STEP_SUMMARY}"
+          else
+            log "no changelog available; rendering version/commit table fallback"
+            # no changelog available: fall back to the version/commit table
+            {
+              echo "## Pending Release"
+              echo ""
+              echo "| Field | Value |"
+              echo "| --- | --- |"
+              echo "| Version | \`${VERSION}\` |"
+              echo "| Commit | \`${SHA}\` |"
+              if [[ -n "${compare_url}" ]]; then
+                echo "| Changes | [${last_tag}...${SHA::8}](${compare_url}) |"
+              fi
+            } >> "${GITHUB_STEP_SUMMARY}"
+          fi
