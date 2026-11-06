@@ -1,5 +1,4 @@
 cooldown: 7d
-
 tools:
   # used to validate workflows
   - name: wrkflw
